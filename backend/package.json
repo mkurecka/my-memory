@@ -1,0 +1,40 @@
+{
+  "name": "text-processor-api",
+  "version": "1.0.0",
+  "description": "Cloudflare Workers backend for Universal Text Processor",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "d1:create": "wrangler d1 create text-processor-db",
+    "d1:migrate": "wrangler d1 migrations apply text-processor-db",
+    "d1:local": "wrangler d1 migrations apply text-processor-db --local",
+    "kv:create": "npm run kv:create:cache && npm run kv:create:sessions",
+    "kv:create:cache": "wrangler kv:namespace create CACHE",
+    "kv:create:sessions": "wrangler kv:namespace create SESSIONS",
+    "r2:create": "wrangler r2 bucket create text-processor-storage",
+    "setup": "npm run d1:create && npm run kv:create && npm run r2:create",
+    "type-check": "tsc --noEmit",
+    "format": "prettier --write \"src/**/*.ts\""
+  },
+  "keywords": [
+    "cloudflare",
+    "workers",
+    "api",
+    "text-processing"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250127.0",
+    "@types/node": "^22.10.5",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.3",
+    "wrangler": "^4.49.1"
+  },
+  "dependencies": {
+    "hono": "^4.7.11",
+    "jose": "^5.10.0"
+  }
+}

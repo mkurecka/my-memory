@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Universal Text Processor",
+  "version": "2.2.0",
+  "description": "Capture and process text from any website with AI-powered actions, memory storage, and webhook integration.",
+  "permissions": ["activeTab", "scripting", "storage", "contextMenus"],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["styles.css"]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["settings.json"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

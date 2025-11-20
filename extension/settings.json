@@ -1,0 +1,199 @@
+{
+  "accounts": [
+    {
+      "id": "michalku_com",
+      "name": "michalku_com",
+      "displayName": "michalku_com",
+      "enabled": true,
+      "writingProfile": {
+        "language": "english",
+        "tone": "professional",
+        "style": "informative and engaging",
+        "personality": "Expert thought leader in technology and business",
+        "guidelines": [
+          "Use clear, concise language",
+          "Focus on actionable insights",
+          "Maintain professional but approachable tone",
+          "Include relevant hashtags sparingly"
+        ],
+        "avoid": [
+          "Excessive emojis",
+          "Overly casual slang",
+          "Controversial political statements"
+        ],
+        "targetAudience": "Business professionals and tech enthusiasts",
+        "contentFocus": [
+          "Technology trends",
+          "Business insights",
+          "Industry analysis",
+          "Professional development"
+        ],
+        "voiceCharacteristics": {
+          "formality": "semi-formal",
+          "humor": "subtle and witty",
+          "enthusiasm": "measured and authentic",
+          "technical": "moderate - explain complex topics simply"
+        }
+      }
+    },
+    {
+      "id": "aicko_cz",
+      "name": "aicko_cz",
+      "displayName": "aicko_cz",
+      "enabled": true,
+      "writingProfile": {
+        "language": "czech",
+        "tone": "creative and inspiring",
+        "style": "storytelling and narrative-driven",
+        "personality": "Creative thinker and innovator",
+        "guidelines": [
+          "Use vivid imagery and metaphors",
+          "Tell stories to illustrate points",
+          "Inspire and motivate readers",
+          "Be authentic and relatable"
+        ],
+        "avoid": [
+          "Dry technical jargon",
+          "Corporate speak",
+          "Being too serious or formal"
+        ],
+        "targetAudience": "Creatives, entrepreneurs, and innovators",
+        "contentFocus": [
+          "Creative process",
+          "Innovation and ideas",
+          "Personal growth",
+          "Inspiration and motivation"
+        ],
+        "voiceCharacteristics": {
+          "formality": "casual",
+          "humor": "playful and engaging",
+          "enthusiasm": "high energy and passionate",
+          "technical": "minimal - focus on concepts over details"
+        }
+      }
+    }
+  ],
+  "modes": {
+    "rewrite_twitter": {
+      "name": "Rewrite for Twitter",
+      "description": "Rewrite the text for Twitter/X post",
+      "promptTemplate": "Rewrite the following text as a Twitter/X post matching this writing profile:\n\nTone: {tone}\nStyle: {style}\nPersonality: {personality}\nTarget Audience: {targetAudience}\nVoice: {formality} formality, {humor} humor, {enthusiasm} enthusiasm\n\nGuidelines:\n{guidelines}\n\nAvoid:\n{avoid}\n\nKeep it concise and within Twitter's character limit (280 characters).\n\nOriginal text:"
+    },
+    "article": {
+      "name": "Create Article",
+      "description": "Expand the text into a full article",
+      "promptTemplate": "Create a comprehensive article based on this text matching this writing profile:\n\nTone: {tone}\nStyle: {style}\nPersonality: {personality}\nTarget Audience: {targetAudience}\n\nGuidelines:\n{guidelines}\n\nCreate a well-structured article with introduction, main points, and conclusion.\n\nSource text:"
+    },
+    "summarize": {
+      "name": "Summarize",
+      "description": "Create a concise summary",
+      "promptTemplate": "Summarize the following text in a clear and concise manner:\n\nTone: {tone}\nStyle: {style}\n\nFocus on key points and main ideas.\n\nText to summarize:"
+    },
+    "translate": {
+      "name": "Translate",
+      "description": "Translate to target language",
+      "promptTemplate": "Translate the following text while maintaining the tone and intent.\n\nTarget language: will be specified separately\n\nText to translate:"
+    },
+    "extract_insights": {
+      "name": "Extract Insights",
+      "description": "Extract key insights and takeaways",
+      "promptTemplate": "Extract the key insights, lessons, and actionable takeaways from this text:\n\nTone: {tone}\nStyle: {style}\n\nPresent insights as bullet points.\n\nText:"
+    },
+    "memory": {
+      "name": "Save to Memory",
+      "description": "Save text to memory without processing",
+      "promptTemplate": ""
+    },
+    "describe_image": {
+      "name": "Describe Image",
+      "description": "Analyze image and generate recreation prompt",
+      "promptTemplate": "Analyze this image in detail and create a comprehensive prompt that could be used to recreate it. Include:\n\n1. Main subject and composition\n2. Visual style, mood, and atmosphere\n3. Colors, lighting, and shadows\n4. Technical details (angle, perspective, depth of field)\n5. Artistic style or medium\n6. Any text or notable elements\n\nProvide the analysis and then a final recreation prompt that starts with 'RECREATION PROMPT:'",
+      "model": "google/gemini-2.0-flash-001"
+    }
+  },
+  "api": {
+    "provider": "openrouter",
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "model": "openai/gpt-4o-mini"
+  },
+  "ui": {
+    "defaultMode": "rewrite",
+    "defaultAccount": "aicko_cz",
+    "showPreview": true,
+    "autoClose": false,
+    "defaultLanguage": "cs"
+  },
+  "languages": [
+    {
+      "code": "en",
+      "name": "English",
+      "instruction": "Write in English"
+    },
+    {
+      "code": "cs",
+      "name": "Czech (Čeština)",
+      "instruction": "Write in Czech language (Čeština)"
+    },
+    {
+      "code": "sk",
+      "name": "Slovak (Slovenčina)",
+      "instruction": "Write in Slovak language (Slovenčina)"
+    },
+    {
+      "code": "de",
+      "name": "German (Deutsch)",
+      "instruction": "Write in German language (Deutsch)"
+    },
+    {
+      "code": "es",
+      "name": "Spanish (Español)",
+      "instruction": "Write in Spanish language (Español)"
+    },
+    {
+      "code": "fr",
+      "name": "French (Français)",
+      "instruction": "Write in French language (Français)"
+    },
+    {
+      "code": "it",
+      "name": "Italian (Italiano)",
+      "instruction": "Write in Italian language (Italiano)"
+    },
+    {
+      "code": "pl",
+      "name": "Polish (Polski)",
+      "instruction": "Write in Polish language (Polski)"
+    },
+    {
+      "code": "ru",
+      "name": "Russian (Русский)",
+      "instruction": "Write in Russian language (Русский)"
+    },
+    {
+      "code": "ja",
+      "name": "Japanese (日本語)",
+      "instruction": "Write in Japanese language (日本語)"
+    },
+    {
+      "code": "zh",
+      "name": "Chinese (中文)",
+      "instruction": "Write in Chinese language (中文)"
+    }
+  ],
+  "webhook": {
+    "enabled": true,
+    "url": "https://text-processor-api.kureckamichal.workers.dev/api/v1/webhook",
+    "events": {
+      "onSaveTweet": true,
+      "onGenerateContent": true,
+      "onProcessText": true,
+      "onSaveToMemory": true,
+      "onApprove": false,
+      "onReject": false
+    }
+  },
+  "backend": {
+    "baseUrl": "https://text-processor-api.kureckamichal.workers.dev",
+    "apiVersion": "v1"
+  }
+}

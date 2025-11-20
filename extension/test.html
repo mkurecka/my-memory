@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal Text Processor - Test Page</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #1da1f2;
+        }
+        .test-section {
+            background: #f5f5f5;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        .test-text {
+            background: white;
+            padding: 15px;
+            border-left: 4px solid #1da1f2;
+            margin: 10px 0;
+        }
+        .instructions {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .status {
+            background: #e7f3ff;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎯 Universal Text Processor - Test Page</h1>
+
+    <div class="instructions">
+        <strong>📋 How to Test:</strong>
+        <ol>
+            <li>Make sure the extension is loaded in <code>chrome://extensions/</code></li>
+            <li>Select any text below</li>
+            <li>Right-click on the selected text</li>
+            <li>Choose "Process Selected Text" from the context menu</li>
+            <li>Open browser console (F12) to see debug logs</li>
+        </ol>
+    </div>
+
+    <div class="status">
+        <strong>Extension Status Check:</strong><br>
+        Open the console (F12) and you should see:<br>
+        <code>[Universal Text Processor] Content script loaded on: file://...</code><br>
+        <code>[Universal Text Processor] Settings loaded successfully</code>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 1: Short Text (Twitter-style)</h2>
+        <div class="test-text">
+            Chrome extensions are powerful tools that enhance browser functionality. They can modify web pages, add new features, and integrate with external services.
+        </div>
+        <p><strong>Try:</strong> Select the text above → Right-click → "Process Selected Text" → Choose "Rewrite for Twitter"</p>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 2: Long Text (Article-style)</h2>
+        <div class="test-text">
+            Artificial intelligence has revolutionized the way we interact with technology. Machine learning algorithms can now process vast amounts of data, recognize patterns, and make predictions with remarkable accuracy. From virtual assistants to autonomous vehicles, AI is transforming industries and creating new possibilities for innovation. However, as AI becomes more prevalent, we must also consider the ethical implications and ensure that these powerful tools are developed responsibly.
+        </div>
+        <p><strong>Try:</strong> Select the text above → Right-click → "Create Article"</p>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 3: Technical Text (Summarize)</h2>
+        <div class="test-text">
+            JavaScript is a high-level, interpreted programming language that conforms to the ECMAScript specification. It is a programming language that is characterized as dynamic, weakly typed, prototype-based and multi-paradigm. JavaScript was originally used only in web browsers, but is now used for server-side programming, game development and mobile application development. JavaScript engines were initially used only in web browsers, but are now embedded in many other types of host software, including server-side in web servers and databases, and in non-web programs such as word processors and PDF software.
+        </div>
+        <p><strong>Try:</strong> Select the text above → Right-click → "Summarize"</p>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 4: Quick Save to Memory</h2>
+        <div class="test-text">
+            "The only way to do great work is to love what you do." - Steve Jobs
+        </div>
+        <p><strong>Try:</strong> Select the quote above → Right-click → "Save to Memory"</p>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 5: Multi-line Selection</h2>
+        <div class="test-text">
+            Line 1: Web development is evolving rapidly.<br>
+            Line 2: New frameworks emerge constantly.<br>
+            Line 3: Developers must continuously learn.<br>
+            Line 4: Best practices change over time.<br>
+            Line 5: User experience remains paramount.
+        </div>
+        <p><strong>Try:</strong> Select multiple lines → Right-click → "Extract Insights"</p>
+    </div>
+
+    <div class="test-section">
+        <h2>📊 Testing Database</h2>
+        <p>After processing some text:</p>
+        <ol>
+            <li>Select any text on this page</li>
+            <li>Right-click → "Process Selected Text"</li>
+            <li>In the modal, click the 📊 Database button</li>
+            <li>You should see your saved entries</li>
+        </ol>
+    </div>
+
+    <div class="test-section">
+        <h2>⚙️ Testing Settings</h2>
+        <p>To configure your API key:</p>
+        <ol>
+            <li>Select any text</li>
+            <li>Right-click → "Process Selected Text"</li>
+            <li>Click the ⚙️ Settings button (bottom-right)</li>
+            <li>Enter your OpenRouter API key</li>
+            <li>Click "Save Settings"</li>
+        </ol>
+    </div>
+
+    <div class="test-section">
+        <h2>🔧 Troubleshooting</h2>
+        <div class="test-text">
+            <strong>If the context menu doesn't appear:</strong>
+            <ul>
+                <li>Check if extension is enabled in chrome://extensions/</li>
+                <li>Reload the extension</li>
+                <li>Refresh this page (F5)</li>
+                <li>Check console for errors (F12)</li>
+            </ul>
+
+            <strong>If settings button doesn't work:</strong>
+            <ul>
+                <li>Open console (F12)</li>
+                <li>Click the settings button</li>
+                <li>Look for error messages</li>
+                <li>Check if "[Universal Text Processor] Settings button clicked" appears</li>
+            </ul>
+
+            <strong>If API calls fail:</strong>
+            <ul>
+                <li>Verify API key is correct (starts with sk-or-v1-)</li>
+                <li>Check you have credits on OpenRouter</li>
+                <li>Look in Network tab for failed requests</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="instructions">
+        <strong>✅ Expected Console Output:</strong><br>
+        <code style="display:block; margin:5px 0;">[Universal Text Processor] Content script loaded on: [URL]</code>
+        <code style="display:block; margin:5px 0;">[Universal Text Processor] Settings loaded successfully</code>
+        <code style="display:block; margin:5px 0;">[Universal Text Processor] Opening modal with text: [your text]</code>
+        <code style="display:block; margin:5px 0;">[Universal Text Processor] API key status: true/false</code>
+    </div>
+
+    <script>
+        // Test script to verify extension is loaded
+        console.log('Test page loaded. If you see extension logs above this, the extension is working!');
+
+        // Listen for selection changes
+        document.addEventListener('selectionchange', () => {
+            const selection = window.getSelection().toString();
+            if (selection.length > 0) {
+                console.log('Text selected:', selection.substring(0, 50) + '...');
+            }
+        });
+    </script>
+</body>
+</html>

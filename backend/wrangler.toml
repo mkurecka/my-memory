@@ -1,0 +1,35 @@
+#:schema node_modules/wrangler/config-schema.json
+name = "text-processor-api"
+main = "src/index.ts"
+compatibility_date = "2025-01-20"
+compatibility_flags = ["nodejs_compat"]
+
+# Bindings
+[[ d1_databases ]]
+binding = "DB"
+database_name = "text-processor-db"
+database_id = "b70b21ae-9fa2-4464-b3fd-9d4eeea7548a"
+
+[[ kv_namespaces ]]
+binding = "CACHE"
+id = "b52a33acf7114a3e842d575b830b980e"
+
+[[ kv_namespaces ]]
+binding = "SESSIONS"
+id = "7d68ad4ef5c14fe1aaaa981c50c15597"
+
+[[ r2_buckets ]]
+binding = "STORAGE"
+bucket_name = "text-processor-storage"
+
+# Environment Variables
+[vars]
+ENVIRONMENT = "development"
+JWT_SECRET = "change-this-in-production"
+API_VERSION = "v1"
+APP_URL = "https://text-processor.app"
+OPENROUTER_API_KEY = "" # Add your OpenRouter API key here
+
+# Observability
+[observability]
+enabled = true
