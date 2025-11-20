@@ -12,7 +12,9 @@
     "deploy:backend": "cd backend && npm run deploy",
     "dev:backend": "cd backend && npm run dev",
     "lint": "echo 'Lint not configured yet'",
-    "validate": "npm run test && echo '✅ All tests passed! Ready to deploy.'"
+    "validate": "npm run test && echo '✅ All tests passed! Ready to deploy.'",
+    "prepare": "husky install",
+    "precommit": "npm test"
   },
   "repository": {
     "type": "git",
@@ -28,6 +30,7 @@
   "author": "Michal Kurecka",
   "license": "MIT",
   "devDependencies": {
+    "husky": "^8.0.3",
     "nodemon": "^3.0.2"
   }
 }

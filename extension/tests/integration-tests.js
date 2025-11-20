@@ -100,13 +100,13 @@ tests.test('background.js does not use URL.createObjectURL', () => {
   );
 });
 
-tests.test('background.js uses base64 conversion', () => {
+tests.test('background.js handles R2 URL response', () => {
   const code = fs.readFileSync(
     path.join(__dirname, '../background.js'),
     'utf8'
   );
-  tests.assertContains(code, 'btoa', 'background.js should use btoa for base64 conversion');
-  tests.assertContains(code, 'data:image/png;base64', 'background.js should create data URLs');
+  tests.assertContains(code, 'responseData.data.url', 'background.js should extract URL from JSON response');
+  tests.assertContains(code, 'await imageResponse.json()', 'background.js should parse JSON response');
 });
 
 // Test 4: Check settings.json has correct endpoint
@@ -125,6 +125,11 @@ tests.test('settings.json has html-to-image-worker endpoint', () => {
     settings.visualContent.htmlToImageWorker.endpoint,
     'https://html-to-image.workers.dev',
     'Should not use default non-existent endpoint'
+  );
+  tests.assertContains(
+    settings.visualContent.htmlToImageWorker.endpoint,
+    '/render',
+    'Endpoint should include /render path'
   );
 });
 
