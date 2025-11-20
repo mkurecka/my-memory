@@ -766,12 +766,10 @@ Return ONLY the caption text, nothing else.`;
           generatedOutput: JSON.stringify(images),
           mode: carouselMode ? 'carousel' : 'single',
           comment: caption,
-          context,
-          timestamp: Date.now(),
-          synced: false
+          context
         };
 
-        await postDatabase.savePost(visualContentData);
+        await postDatabase.addPost(visualContentData);
 
         // Send webhook notification if enabled
         await sendWebhookNotification('onVisualContentCreated', {
