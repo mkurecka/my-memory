@@ -1,0 +1,33 @@
+{
+  "name": "universal-text-processor",
+  "version": "2.2.0",
+  "description": "Universal Text Processor - Chrome Extension + Cloudflare Workers Backend",
+  "scripts": {
+    "test": "npm run test:extension && npm run test:backend",
+    "test:extension": "npm run test:templates && npm run test:integration",
+    "test:templates": "node extension/tests/template-tests.js",
+    "test:integration": "node extension/tests/integration-tests.js",
+    "test:backend": "node backend/tests/api-tests.js",
+    "test:watch": "nodemon --watch extension --watch backend --exec npm test",
+    "deploy:backend": "cd backend && npm run deploy",
+    "dev:backend": "cd backend && npm run dev",
+    "lint": "echo 'Lint not configured yet'",
+    "validate": "npm run test && echo '✅ All tests passed! Ready to deploy.'"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mkurecka/x-post-sender.git"
+  },
+  "keywords": [
+    "chrome-extension",
+    "text-processor",
+    "cloudflare-workers",
+    "ai",
+    "visual-content"
+  ],
+  "author": "Michal Kurecka",
+  "license": "MIT",
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}

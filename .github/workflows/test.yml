@@ -1,0 +1,41 @@
+name: Tests
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install root dependencies
+      run: npm install
+
+    - name: Install backend dependencies
+      run: cd backend && npm install
+
+    - name: Run template tests
+      run: npm run test:templates
+
+    - name: Run integration tests
+      run: npm run test:integration
+
+    - name: Run backend API tests
+      run: npm run test:backend
+
+    - name: Test summary
+      if: always()
+      run: |
+        echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "✅ All tests completed" >> $GITHUB_STEP_SUMMARY

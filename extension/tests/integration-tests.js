@@ -1,0 +1,362 @@
+// Integration Tests for Extension
+// Run with: node tests/integration-tests.js
+
+const fs = require('fs');
+const path = require('path');
+
+class IntegrationTests {
+  constructor() {
+    this.passed = 0;
+    this.failed = 0;
+    this.tests = [];
+  }
+
+  test(name, fn) {
+    this.tests.push({ name, fn });
+  }
+
+  async run() {
+    console.log('\n🧪 Running Integration Tests\n');
+    console.log('='.repeat(60));
+
+    for (const { name, fn } of this.tests) {
+      try {
+        await fn();
+        this.passed++;
+        console.log(`✅ ${name}`);
+      } catch (error) {
+        this.failed++;
+        console.log(`❌ ${name}`);
+        console.log(`   Error: ${error.message}`);
+        if (error.stack) {
+          console.log(`   ${error.stack.split('\n')[1]?.trim()}`);
+        }
+      }
+    }
+
+    console.log('='.repeat(60));
+    console.log(`\n📊 Results: ${this.passed} passed, ${this.failed} failed\n`);
+
+    if (this.failed > 0) {
+      process.exit(1);
+    }
+  }
+
+  assert(condition, message) {
+    if (!condition) {
+      throw new Error(message || 'Assertion failed');
+    }
+  }
+
+  assertContains(text, substring, message) {
+    if (!text.includes(substring)) {
+      throw new Error(
+        message || `Expected text to contain "${substring}"`
+      );
+    }
+  }
+
+  assertNotContains(text, substring, message) {
+    if (text.includes(substring)) {
+      throw new Error(
+        message || `Expected text not to contain "${substring}"`
+      );
+    }
+  }
+}
+
+const tests = new IntegrationTests();
+
+// Test 1: Check database.js API
+tests.test('PostDatabase has addPost method', () => {
+  const code = fs.readFileSync(
+    path.join(__dirname, '../database.js'),
+    'utf8'
+  );
+  tests.assertContains(code, 'async addPost(', 'database.js should have addPost method');
+  tests.assertNotContains(code, 'async savePost(', 'database.js should not have savePost method');
+});
+
+// Test 2: Check background.js uses correct database method
+tests.test('background.js uses addPost (not savePost)', () => {
+  const code = fs.readFileSync(
+    path.join(__dirname, '../background.js'),
+    'utf8'
+  );
+  tests.assertContains(code, 'postDatabase.addPost', 'background.js should use addPost');
+  tests.assertNotContains(code, 'postDatabase.savePost', 'background.js should not use savePost');
+});
+
+// Test 3: Check background.js does not use DOM APIs
+tests.test('background.js does not use URL.createObjectURL', () => {
+  const code = fs.readFileSync(
+    path.join(__dirname, '../background.js'),
+    'utf8'
+  );
+  tests.assertNotContains(
+    code,
+    'URL.createObjectURL',
+    'background.js should not use URL.createObjectURL'
+  );
+});
+
+tests.test('background.js uses base64 conversion', () => {
+  const code = fs.readFileSync(
+    path.join(__dirname, '../background.js'),
+    'utf8'
+  );
+  tests.assertContains(code, 'btoa', 'background.js should use btoa for base64 conversion');
+  tests.assertContains(code, 'data:image/png;base64', 'background.js should create data URLs');
+});
+
+// Test 4: Check settings.json has correct endpoint
+tests.test('settings.json has html-to-image-worker endpoint', () => {
+  const settings = JSON.parse(
+    fs.readFileSync(
+      path.join(__dirname, '../settings.json'),
+      'utf8'
+    )
+  );
+  tests.assert(
+    settings.visualContent?.htmlToImageWorker?.endpoint,
+    'settings.json should have htmlToImageWorker.endpoint'
+  );
+  tests.assertNotContains(
+    settings.visualContent.htmlToImageWorker.endpoint,
+    'https://html-to-image.workers.dev',
+    'Should not use default non-existent endpoint'
+  );
+});
+
+tests.test('settings.json has webhook configuration', () => {
+  const settings = JSON.parse(
+    fs.readFileSync(
+      path.join(__dirname, '../settings.json'),
+      'utf8'
+    )
+  );
+  tests.assert(
+    settings.webhook?.url,
+    'settings.json should have webhook.url'
+  );
+  tests.assertContains(
+    settings.webhook.url,
+    '/webhook',
+    'Webhook URL should contain /webhook path'
+  );
+});
+
+tests.test('settings.json has visual content enabled', () => {
+  const settings = JSON.parse(
+    fs.readFileSync(
+      path.join(__dirname, '../settings.json'),
+      'utf8'
+    )
+  );
+  tests.assert(
+    settings.visualContent?.enabled === true,
+    'Visual content should be enabled'
+  );
+});
+
+tests.test('settings.json has all image types configured', () => {
+  const settings = JSON.parse(
+    fs.readFileSync(
+      path.join(__dirname, '../settings.json'),
+      'utf8'
+    )
+  );
+  const required = ['quote_card', 'screenshot_card', 'infographic', 'story_card', 'thumbnail'];
+  required.forEach(type => {
+    tests.assert(
+      settings.visualContent?.imageTypes?.[type],
+      `settings.json should have imageTypes.${type}`
+    );
+  });
+});
+
+// Test 5: Check manifest.json
+tests.test('manifest.json does not have type: module in background', () => {
+  const manifest = JSON.parse(
+    fs.readFileSync(
+      path.join(__dirname, '../manifest.json'),
+      'utf8'
+    )
+  );
+  tests.assert(
+    manifest.background?.type !== 'module',
+    'manifest.json background should not have type: module'
+  );
+});
+
+tests.test('manifest.json has service worker', () => {
+  const manifest = JSON.parse(
+    fs.readFileSync(
+      path.join(__dirname, '../manifest.json'),
+      'utf8'
+    )
+  );
+  tests.assert(
+    manifest.background?.service_worker === 'background.js',
+    'manifest.json should have background.service_worker'
+  );
+});
+
+tests.test('manifest.json has required permissions', () => {
+  const manifest = JSON.parse(
+    fs.readFileSync(
+      path.join(__dirname, '../manifest.json'),
+      'utf8'
+    )
+  );
+  const required = ['storage'];
+  required.forEach(perm => {
+    tests.assert(
+      manifest.permissions?.includes(perm),
+      `manifest.json should have ${perm} permission`
+    );
+  });
+});
+
+// Test 6: Check background.js imports
+tests.test('background.js imports template-generators.js', () => {
+  const code = fs.readFileSync(
+    path.join(__dirname, '../background.js'),
+    'utf8'
+  );
+  tests.assertContains(
+    code,
+    "template-generators.js",
+    'background.js should import template-generators.js'
+  );
+});
+
+tests.test('background.js imports database.js', () => {
+  const code = fs.readFileSync(
+    path.join(__dirname, '../background.js'),
+    'utf8'
+  );
+  tests.assertContains(
+    code,
+    "importScripts",
+    'background.js should use importScripts'
+  );
+  tests.assertContains(
+    code,
+    "database.js",
+    'background.js should import database.js'
+  );
+});
+
+// Test 7: Check message handlers
+tests.test('background.js has createVisualContent handler', () => {
+  const code = fs.readFileSync(
+    path.join(__dirname, '../background.js'),
+    'utf8'
+  );
+  tests.assertContains(
+    code,
+    'action === "createVisualContent"',
+    'background.js should handle createVisualContent action'
+  );
+});
+
+tests.test('background.js has ping handler', () => {
+  const code = fs.readFileSync(
+    path.join(__dirname, '../background.js'),
+    'utf8'
+  );
+  tests.assertContains(
+    code,
+    'action === "ping"',
+    'background.js should handle ping action for service worker wake-up'
+  );
+});
+
+// Test 8: Check content.js
+tests.test('content.js has wakeUpServiceWorker function', () => {
+  const code = fs.readFileSync(
+    path.join(__dirname, '../content.js'),
+    'utf8'
+  );
+  tests.assertContains(
+    code,
+    'wakeUpServiceWorker',
+    'content.js should have wakeUpServiceWorker function'
+  );
+});
+
+tests.test('content.js has create-image button', () => {
+  const code = fs.readFileSync(
+    path.join(__dirname, '../content.js'),
+    'utf8'
+  );
+  tests.assertContains(
+    code,
+    'data-action="create-image"',
+    'content.js should have create-image button'
+  );
+});
+
+tests.test('content.js handles create-image action', () => {
+  const code = fs.readFileSync(
+    path.join(__dirname, '../content.js'),
+    'utf8'
+  );
+  tests.assertContains(
+    code,
+    "case 'create-image':",
+    'content.js should handle create-image action'
+  );
+});
+
+// Test 9: Check for common anti-patterns
+tests.test('background.js does not use eval', () => {
+  const code = fs.readFileSync(
+    path.join(__dirname, '../background.js'),
+    'utf8'
+  );
+  tests.assertNotContains(
+    code,
+    'eval(',
+    'background.js should not use eval'
+  );
+});
+
+tests.test('template-generators.js does not use eval', () => {
+  const code = fs.readFileSync(
+    path.join(__dirname, '../template-generators.js'),
+    'utf8'
+  );
+  tests.assertNotContains(
+    code,
+    'eval(',
+    'template-generators.js should not use eval'
+  );
+});
+
+// Test 10: File existence checks
+tests.test('All required extension files exist', () => {
+  const required = [
+    'manifest.json',
+    'background.js',
+    'content.js',
+    'database.js',
+    'api-client.js',
+    'settings-manager.js',
+    'template-generators.js',
+    'settings.json',
+    'styles.css'
+  ];
+
+  required.forEach(file => {
+    const exists = fs.existsSync(path.join(__dirname, '..', file));
+    tests.assert(exists, `Required file ${file} should exist`);
+  });
+});
+
+// Run all tests
+tests.run().catch(error => {
+  console.error('Test runner failed:', error);
+  process.exit(1);
+});
