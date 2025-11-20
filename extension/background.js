@@ -685,7 +685,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             }
 
             const imageBlob = await imageResponse.blob();
-            const imageUrl = URL.createObjectURL(imageBlob);
+
+            // Convert blob to base64 data URL (service worker compatible)
+            const arrayBuffer = await imageBlob.arrayBuffer();
+            const uint8Array = new Uint8Array(arrayBuffer);
+            let binaryString = '';
+            for (let i = 0; i < uint8Array.length; i++) {
+              binaryString += String.fromCharCode(uint8Array[i]);
+            }
+            const base64 = btoa(binaryString);
+            const imageUrl = `data:image/png;base64,${base64}`;
 
             images.push({
               type: imageType,
