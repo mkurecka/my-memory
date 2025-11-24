@@ -185,6 +185,7 @@
     "url": "https://text-processor-api.kureckamichal.workers.dev/api/v1/webhook",
     "events": {
       "onSaveTweet": true,
+      "onSaveYouTubeVideo": true,
       "onGenerateContent": true,
       "onProcessText": true,
       "onSaveToMemory": true,

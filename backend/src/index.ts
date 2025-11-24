@@ -51,6 +51,49 @@ app.get('/health', (c) => {
   });
 });
 
+// Settings Dashboard UI
+app.get('/dashboard', (c) => {
+  // For now, redirect to a simple dashboard info page
+  // The full HTML dashboard is available at /pages/settings-dashboard.html
+  return c.html(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings Dashboard</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; }
+    h1 { color: #065f4a; }
+    .card { background: white; padding: 24px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin: 20px 0; }
+    .endpoint { background: #f5f6f7; padding: 12px; border-radius: 8px; font-family: monospace; font-size: 14px; }
+    a { color: #065f4a; text-decoration: none; font-weight: 600; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <h1>Settings Dashboard API</h1>
+  <div class="card">
+    <h2>Available Endpoints</h2>
+    <p><strong>Settings History:</strong></p>
+    <div class="endpoint">GET /api/settings/history</div>
+    <br>
+    <p><strong>User Profiles (Airtable):</strong></p>
+    <div class="endpoint">GET /api/airtable/profiles</div>
+    <br>
+    <p><strong>User Settings:</strong></p>
+    <div class="endpoint">GET /api/settings</div>
+  </div>
+  <div class="card">
+    <h2>Frontend Dashboard</h2>
+    <p>A full-featured dashboard UI is available at:</p>
+    <div class="endpoint">/pages/settings-dashboard.html</div>
+    <br>
+    <p><a href="https://github.com/mkurecka/x-post-sender">View on GitHub</a></p>
+  </div>
+</body>
+</html>`);
+});
+
 // API routes
 app.route('/api/auth', authRoutes);
 app.route('/api/process', processRoutes);

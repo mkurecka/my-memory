@@ -619,15 +619,85 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   if (request.action === "saveTweet") {
     (async () => {
-      const savedTweet = await postDatabase.saveTweet(request.data);
+      const tweetData = request.data;
+      const savedTweet = await postDatabase.saveTweet(tweetData);
 
-      // Send webhook notification if enabled
+      // Send webhook notification with full tweet data
       await sendWebhookNotification('onSaveTweet', {
         event: 'tweet_saved',
-        data: savedTweet
+        data: {
+          id: savedTweet.id,
+          tweetId: tweetData.tweetId,
+          text: tweetData.text,
+          author: {
+            name: tweetData.author.name,
+            username: tweetData.author.handle,  // Make username explicit
+            handle: tweetData.author.handle,
+            url: tweetData.author.url
+          },
+          url: tweetData.url,
+          timestamp: tweetData.timestamp,
+          media: tweetData.media,
+          metadata: tweetData.metadata,
+          savedAt: new Date().toISOString()
+        }
       });
 
       sendResponse(savedTweet);
+    })();
+    return true;
+  }
+
+  if (request.action === "saveYouTubeVideo") {
+    (async () => {
+      try {
+        const videoData = request.data;
+
+        // Save to database
+        const savedVideo = await postDatabase.addPost({
+          type: 'youtube_video',
+          originalText: videoData.title,
+          generatedOutput: videoData.transcript?.text || null,
+          context: {
+            videoId: videoData.videoId,
+            url: videoData.url,
+            title: videoData.title,
+            channel: videoData.channel,
+            description: videoData.description,
+            transcript: videoData.transcript,
+            metadata: videoData.metadata
+          },
+          status: 'pending'
+        });
+
+        console.log('[YouTube] Video saved to database:', savedVideo);
+
+        // Send webhook notification if enabled
+        await sendWebhookNotification('onSaveYouTubeVideo', {
+          event: 'youtube_video_saved',
+          data: {
+            id: savedVideo.id,
+            videoId: videoData.videoId,
+            url: videoData.url,
+            title: videoData.title,
+            channel: videoData.channel,
+            description: videoData.description,
+            transcript: videoData.transcript,
+            metadata: videoData.metadata
+          }
+        });
+
+        sendResponse({
+          success: true,
+          data: savedVideo
+        });
+      } catch (error) {
+        console.error('[YouTube] Error saving video:', error);
+        sendResponse({
+          success: false,
+          error: error.message
+        });
+      }
     })();
     return true;
   }

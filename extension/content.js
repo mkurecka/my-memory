@@ -1814,3 +1814,355 @@ if (document.readyState === 'loading') {
 } else {
   initTwitterObserver();
 }
+
+// ============================================================================
+// YOUTUBE INTEGRATION
+// ============================================================================
+
+/**
+ * Detects if current page is YouTube
+ */
+function isYouTubePage() {
+  return window.location.hostname === 'www.youtube.com' ||
+         window.location.hostname === 'youtube.com' ||
+         window.location.hostname === 'm.youtube.com';
+}
+
+/**
+ * Checks if we're on a YouTube video page
+ */
+function isYouTubeVideoPage() {
+  return isYouTubePage() && window.location.pathname === '/watch';
+}
+
+/**
+ * Extract video ID from YouTube URL
+ */
+function getYouTubeVideoId() {
+  const urlParams = new URLSearchParams(window.location.search);
+  return urlParams.get('v');
+}
+
+/**
+ * Extract video title from page
+ */
+function getYouTubeVideoTitle() {
+  // Try multiple selectors for video title
+  const titleSelectors = [
+    'h1.ytd-video-primary-info-renderer',
+    'h1.title.ytd-video-primary-info-renderer',
+    'yt-formatted-string.style-scope.ytd-video-primary-info-renderer',
+    'h1 yt-formatted-string'
+  ];
+
+  for (const selector of titleSelectors) {
+    const titleElement = document.querySelector(selector);
+    if (titleElement?.textContent?.trim()) {
+      return titleElement.textContent.trim();
+    }
+  }
+
+  // Fallback to page title
+  const pageTitle = document.title;
+  if (pageTitle && pageTitle !== 'YouTube') {
+    return pageTitle.replace(' - YouTube', '').trim();
+  }
+
+  return 'Unknown Video';
+}
+
+/**
+ * Extract transcript from YouTube page if available
+ * YouTube transcripts are loaded dynamically, so we look in the page source
+ */
+function getYouTubeTranscript() {
+  try {
+    // Check if transcript panel is open
+    const transcriptSegments = document.querySelectorAll('ytd-transcript-segment-renderer');
+
+    if (transcriptSegments && transcriptSegments.length > 0) {
+      const transcriptText = Array.from(transcriptSegments)
+        .map(segment => {
+          const textElement = segment.querySelector('.segment-text');
+          return textElement ? textElement.textContent.trim() : '';
+        })
+        .filter(text => text.length > 0)
+        .join('\n');
+
+      if (transcriptText) {
+        return {
+          available: true,
+          text: transcriptText,
+          source: 'transcript_panel'
+        };
+      }
+    }
+
+    // Check if transcript is available but not loaded
+    const transcriptButton = document.querySelector('button[aria-label*="transcript" i], button[aria-label*="Show transcript" i]');
+    if (transcriptButton) {
+      return {
+        available: true,
+        text: null,
+        source: 'button_found',
+        message: 'Transcript available but not loaded. Click "Show transcript" button first.'
+      };
+    }
+
+    return {
+      available: false,
+      text: null,
+      source: 'not_found',
+      message: 'No transcript available for this video'
+    };
+  } catch (error) {
+    console.error('[YouTube] Error extracting transcript:', error);
+    return {
+      available: false,
+      text: null,
+      source: 'error',
+      message: error.message
+    };
+  }
+}
+
+/**
+ * Extract all video data
+ */
+function extractYouTubeVideoData() {
+  const videoId = getYouTubeVideoId();
+  const title = getYouTubeVideoTitle();
+  const transcript = getYouTubeTranscript();
+  const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+  // Get channel info
+  let channelName = 'Unknown Channel';
+  let channelUrl = null;
+
+  const channelLinkElement = document.querySelector('ytd-channel-name a, #owner a, #channel-name a');
+  if (channelLinkElement) {
+    channelName = channelLinkElement.textContent.trim();
+    channelUrl = channelLinkElement.href;
+  }
+
+  // Get video description
+  let description = '';
+  const descriptionElement = document.querySelector('ytd-text-inline-expander #description-inline-expander, #description');
+  if (descriptionElement) {
+    description = descriptionElement.textContent.trim().substring(0, 500); // First 500 chars
+  }
+
+  return {
+    videoId,
+    url: videoUrl,
+    title,
+    channel: {
+      name: channelName,
+      url: channelUrl
+    },
+    description,
+    transcript,
+    metadata: {
+      pageUrl: window.location.href,
+      capturedAt: new Date().toISOString()
+    }
+  };
+}
+
+/**
+ * Create and inject save button for YouTube videos
+ */
+function injectYouTubeSaveButton() {
+  if (!isYouTubeVideoPage()) {
+    return;
+  }
+
+  // Check if button already exists
+  if (document.querySelector('.utp-youtube-save-btn')) {
+    return;
+  }
+
+  // Wait for the right container to exist
+  const targetContainer = document.querySelector('#actions, #top-level-buttons-computed');
+  if (!targetContainer) {
+    return;
+  }
+
+  // Create save button
+  const saveButton = document.createElement('button');
+  saveButton.className = 'utp-youtube-save-btn';
+  saveButton.style.cssText = `
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    margin-left: 8px;
+    background: #065fd4;
+    color: white;
+    border: none;
+    border-radius: 18px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: "Roboto", "Arial", sans-serif;
+  `;
+
+  saveButton.innerHTML = `
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+      <polyline points="17 21 17 13 7 13 7 21"></polyline>
+      <polyline points="7 3 7 8 15 8"></polyline>
+    </svg>
+    <span>Save Video</span>
+  `;
+
+  // Hover effects
+  saveButton.addEventListener('mouseenter', () => {
+    saveButton.style.background = '#0458b8';
+  });
+  saveButton.addEventListener('mouseleave', () => {
+    saveButton.style.background = '#065fd4';
+  });
+
+  // Click handler
+  saveButton.addEventListener('click', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Show loading state
+    const originalHTML = saveButton.innerHTML;
+    saveButton.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation: spin 1s linear infinite;">
+        <circle cx="12" cy="12" r="10"></circle>
+        <path d="M12 6v6l4 2"></path>
+      </svg>
+      <span>Saving...</span>
+    `;
+    saveButton.style.background = '#065fd4';
+    saveButton.disabled = true;
+
+    try {
+      // Extract video data
+      const videoData = extractYouTubeVideoData();
+
+      console.log('[YouTube] Extracted video data:', videoData);
+
+      // Wake up service worker first
+      await wakeUpServiceWorker();
+
+      // Send to background script to save
+      const response = await chrome.runtime.sendMessage({
+        action: 'saveYouTubeVideo',
+        data: videoData
+      });
+
+      if (response && response.success) {
+        // Show success state
+        saveButton.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <span>Saved!</span>
+        `;
+        saveButton.style.background = '#0c8043';
+
+        // Reset after 2 seconds
+        setTimeout(() => {
+          saveButton.innerHTML = originalHTML;
+          saveButton.style.background = '#065fd4';
+          saveButton.disabled = false;
+        }, 2000);
+      } else {
+        throw new Error(response?.error || 'Failed to save video');
+      }
+    } catch (error) {
+      console.error('[YouTube] Error saving video:', error);
+
+      // Show error state
+      saveButton.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="15" y1="9" x2="9" y2="15"></line>
+          <line x1="9" y1="9" x2="15" y2="15"></line>
+        </svg>
+        <span>Error</span>
+      `;
+      saveButton.style.background = '#c00';
+
+      // Reset after 2 seconds
+      setTimeout(() => {
+        saveButton.innerHTML = originalHTML;
+        saveButton.style.background = '#065fd4';
+        saveButton.disabled = false;
+      }, 2000);
+    }
+  });
+
+  // Add CSS for spin animation
+  if (!document.getElementById('utp-youtube-styles')) {
+    const style = document.createElement('style');
+    style.id = 'utp-youtube-styles';
+    style.textContent = `
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  targetContainer.appendChild(saveButton);
+}
+
+/**
+ * Observer to watch for YouTube video page changes
+ */
+function initYouTubeObserver() {
+  if (!isYouTubePage()) {
+    return;
+  }
+
+  console.log('[YouTube] Initializing YouTube integration');
+
+  // Process current video if on video page
+  if (isYouTubeVideoPage()) {
+    // Wait a bit for YouTube's dynamic content to load
+    setTimeout(injectYouTubeSaveButton, 1000);
+  }
+
+  // Watch for navigation (YouTube is SPA)
+  let lastUrl = window.location.href;
+  const observer = new MutationObserver(() => {
+    const currentUrl = window.location.href;
+    if (currentUrl !== lastUrl) {
+      lastUrl = currentUrl;
+      console.log('[YouTube] URL changed:', currentUrl);
+
+      // Remove old button if exists
+      const oldButton = document.querySelector('.utp-youtube-save-btn');
+      if (oldButton) {
+        oldButton.remove();
+      }
+
+      // Inject new button if on video page
+      if (isYouTubeVideoPage()) {
+        setTimeout(injectYouTubeSaveButton, 1000);
+      }
+    }
+  });
+
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
+
+  console.log('[YouTube] Observer initialized');
+}
+
+// Initialize YouTube integration when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initYouTubeObserver);
+} else {
+  initYouTubeObserver();
+}

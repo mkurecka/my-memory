@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings Dashboard - Universal Text Processor</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --primary-green: #065f4a;
+      --primary-green-hover: #054d3d;
+      --secondary-green: #0c8043;
+      --light-green: #e8f5f0;
+      --bg-gray: #f5f6f7;
+      --bg-white: #ffffff;
+      --text-dark: #1f2937;
+      --text-gray: #6b7280;
+      --text-light: #9ca3af;
+      --border-gray: #e5e7eb;
+      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --radius-full: 9999px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: var(--bg-gray);
+      color: var(--text-dark);
+      line-height: 1.6;
+    }
+
+    .dashboard {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 260px;
+      background: var(--bg-white);
+      padding: 24px 0;
+      box-shadow: var(--shadow-md);
+      position: fixed;
+      height: 100vh;
+      overflow-y: auto;
+    }
+
+    .sidebar-header {
+      padding: 0 24px 24px;
+      border-bottom: 1px solid var(--border-gray);
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text-dark);
+    }
+
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      background: var(--primary-green);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+    }
+
+    .sidebar-menu {
+      padding: 24px 0;
+    }
+
+    .menu-section {
+      margin-bottom: 24px;
+    }
+
+    .menu-label {
+      padding: 0 24px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-light);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+    }
+
+    .menu-item {
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--text-gray);
+      text-decoration: none;
+      transition: all 0.2s;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      border-left: 3px solid transparent;
+    }
+
+    .menu-item:hover {
+      background: var(--light-green);
+      color: var(--primary-green);
+    }
+
+    .menu-item.active {
+      background: var(--light-green);
+      color: var(--primary-green);
+      border-left-color: var(--primary-green);
+      font-weight: 600;
+    }
+
+    .menu-icon {
+      width: 20px;
+      height: 20px;
+    }
+
+    .menu-badge {
+      margin-left: auto;
+      background: var(--primary-green);
+      color: white;
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    /* Main Content */
+    .main-content {
+      margin-left: 260px;
+      flex: 1;
+      padding: 32px;
+      max-width: 100%;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 32px;
+    }
+
+    .header-left h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--text-dark);
+      margin-bottom: 4px;
+    }
+
+    .header-left p {
+      font-size: 14px;
+      color: var(--text-gray);
+    }
+
+    .header-right {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: var(--primary-green);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-green-hover);
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .btn-secondary {
+      background: var(--bg-white);
+      color: var(--text-dark);
+      border: 1px solid var(--border-gray);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-gray);
+    }
+
+    .user-profile {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 12px;
+      background: var(--bg-white);
+      border-radius: var(--radius-full);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .user-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary-green), var(--secondary-green));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .user-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .user-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-dark);
+    }
+
+    .user-email {
+      font-size: 12px;
+      color: var(--text-gray);
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 20px;
+      margin-bottom: 32px;
+    }
+
+    .stat-card {
+      background: var(--bg-white);
+      padding: 24px;
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stat-card:hover {
+      box-shadow: var(--shadow-md);
+      transform: translateY(-2px);
+    }
+
+    .stat-card.primary {
+      background: linear-gradient(135deg, var(--primary-green), var(--secondary-green));
+      color: white;
+    }
+
+    .stat-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .stat-title {
+      font-size: 14px;
+      font-weight: 500;
+      opacity: 0.9;
+    }
+
+    .stat-icon {
+      width: 24px;
+      height: 24px;
+      opacity: 0.7;
+    }
+
+    .stat-value {
+      font-size: 36px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .stat-change {
+      font-size: 13px;
+      font-weight: 500;
+      opacity: 0.8;
+    }
+
+    .stat-change.positive {
+      color: var(--secondary-green);
+    }
+
+    /* Content Cards */
+    .content-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+
+    @media (max-width: 1024px) {
+      .content-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: var(--bg-white);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+    }
+
+    .card-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border-gray);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .card-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text-dark);
+    }
+
+    .card-body {
+      padding: 24px;
+    }
+
+    /* History Timeline */
+    .timeline {
+      position: relative;
+      padding-left: 32px;
+    }
+
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 8px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: var(--border-gray);
+    }
+
+    .timeline-item {
+      position: relative;
+      margin-bottom: 24px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border-gray);
+    }
+
+    .timeline-item:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+    }
+
+    .timeline-dot {
+      position: absolute;
+      left: -28px;
+      top: 4px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--primary-green);
+      border: 3px solid var(--bg-white);
+      box-shadow: 0 0 0 2px var(--border-gray);
+    }
+
+    .timeline-content {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .timeline-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-dark);
+    }
+
+    .timeline-desc {
+      font-size: 13px;
+      color: var(--text-gray);
+    }
+
+    .timeline-time {
+      font-size: 12px;
+      color: var(--text-light);
+    }
+
+    /* Airtable Profiles */
+    .profile-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .profile-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      border-radius: var(--radius-md);
+      background: var(--bg-gray);
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+
+    .profile-item:hover {
+      background: var(--light-green);
+    }
+
+    .profile-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary-green), var(--secondary-green));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .profile-info {
+      flex: 1;
+    }
+
+    .profile-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-dark);
+    }
+
+    .profile-email {
+      font-size: 12px;
+      color: var(--text-gray);
+    }
+
+    .profile-badge {
+      padding: 4px 10px;
+      border-radius: var(--radius-full);
+      font-size: 11px;
+      font-weight: 600;
+      background: var(--light-green);
+      color: var(--primary-green);
+    }
+
+    .profile-badge.inactive {
+      background: #f3f4f6;
+      color: var(--text-light);
+    }
+
+    /* Loading State */
+    .loading {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 40px;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid var(--border-gray);
+      border-top-color: var(--primary-green);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-gray);
+    }
+
+    .empty-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.3;
+    }
+
+    .empty-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .empty-desc {
+      font-size: 14px;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .sidebar {
+        width: 220px;
+      }
+
+      .main-content {
+        margin-left: 220px;
+        padding: 20px;
+      }
+
+      .header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+      }
+
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="dashboard">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <div class="logo-icon">UTP</div>
+          <span>Text Processor</span>
+        </div>
+      </div>
+
+      <nav class="sidebar-menu">
+        <div class="menu-section">
+          <div class="menu-label">Menu</div>
+          <a href="#" class="menu-item" data-view="dashboard">
+            <svg class="menu-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+            </svg>
+            <span>Dashboard</span>
+          </a>
+          <a href="#" class="menu-item active" data-view="settings">
+            <svg class="menu-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+            <span>Settings</span>
+          </a>
+          <a href="#" class="menu-item" data-view="history">
+            <svg class="menu-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>History</span>
+            <span class="menu-badge" id="historyCount">0</span>
+          </a>
+          <a href="#" class="menu-item" data-view="profiles">
+            <svg class="menu-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+            </svg>
+            <span>Profiles</span>
+          </a>
+        </div>
+
+        <div class="menu-section">
+          <div class="menu-label">General</div>
+          <a href="#" class="menu-item">
+            <svg class="menu-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>Help</span>
+          </a>
+          <a href="#" class="menu-item" onclick="logout()">
+            <svg class="menu-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+            </svg>
+            <span>Logout</span>
+          </a>
+        </div>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Header -->
+      <div class="header">
+        <div class="header-left">
+          <h1>Settings Dashboard</h1>
+          <p>Manage your preferences and view history</p>
+        </div>
+        <div class="header-right">
+          <button class="btn btn-secondary" onclick="refreshData()">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            Refresh
+          </button>
+          <button class="btn btn-primary" onclick="exportSettings()">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+            </svg>
+            Export
+          </button>
+          <div class="user-profile">
+            <div class="user-avatar" id="userAvatar">U</div>
+            <div class="user-info">
+              <div class="user-name" id="userName">Loading...</div>
+              <div class="user-email" id="userEmail">...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stats Grid -->
+      <div class="stats-grid">
+        <div class="stat-card primary">
+          <div class="stat-header">
+            <div class="stat-title">Total Settings</div>
+            <svg class="stat-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+          </div>
+          <div class="stat-value" id="totalSettings">0</div>
+          <div class="stat-change">Active configurations</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-header">
+            <div class="stat-title">History Entries</div>
+            <svg class="stat-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </div>
+          <div class="stat-value" id="historyTotal">0</div>
+          <div class="stat-change positive" id="historyChange">Last 30 days</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-header">
+            <div class="stat-title">Active Profiles</div>
+            <svg class="stat-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+            </svg>
+          </div>
+          <div class="stat-value" id="activeProfiles">0</div>
+          <div class="stat-change" id="profilesChange">From Airtable</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-header">
+            <div class="stat-title">Last Updated</div>
+            <svg class="stat-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+          </div>
+          <div class="stat-value" style="font-size: 20px;" id="lastUpdated">Never</div>
+          <div class="stat-change" id="lastUpdatedRelative">--</div>
+        </div>
+      </div>
+
+      <!-- Content Grid -->
+      <div class="content-grid">
+        <!-- Settings History -->
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Settings History</h2>
+            <button class="btn btn-secondary" style="padding: 8px 16px; font-size: 13px;" onclick="loadHistory()">
+              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+              </svg>
+              Reload
+            </button>
+          </div>
+          <div class="card-body">
+            <div id="historyContent">
+              <div class="loading">
+                <div class="spinner"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Airtable Profiles -->
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">User Profiles</h2>
+            <button class="btn btn-secondary" style="padding: 8px 16px; font-size: 13px;" onclick="loadProfiles()">
+              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+              </svg>
+              Reload
+            </button>
+          </div>
+          <div class="card-body">
+            <div id="profilesContent">
+              <div class="loading">
+                <div class="spinner"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const API_BASE = window.location.origin;
+    let authToken = localStorage.getItem('auth_token');
+
+    // Initialize dashboard
+    async function initDashboard() {
+      if (!authToken) {
+        alert('Please login first');
+        window.location.href = '/login.html';
+        return;
+      }
+
+      await Promise.all([
+        loadUserInfo(),
+        loadSettings(),
+        loadHistory(),
+        loadProfiles()
+      ]);
+    }
+
+    // Load user info
+    async function loadUserInfo() {
+      try {
+        const response = await fetch(`${API_BASE}/api/auth/me`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const data = await response.json();
+
+        if (data.success && data.user) {
+          document.getElementById('userName').textContent = data.user.email.split('@')[0];
+          document.getElementById('userEmail').textContent = data.user.email;
+          document.getElementById('userAvatar').textContent = data.user.email[0].toUpperCase();
+        }
+      } catch (error) {
+        console.error('Failed to load user info:', error);
+      }
+    }
+
+    // Load settings
+    async function loadSettings() {
+      try {
+        const response = await fetch(`${API_BASE}/api/settings`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const data = await response.json();
+
+        if (data.success && data.settings) {
+          const settingsCount = Object.keys(data.settings).length;
+          document.getElementById('totalSettings').textContent = settingsCount;
+        }
+      } catch (error) {
+        console.error('Failed to load settings:', error);
+      }
+    }
+
+    // Load history
+    async function loadHistory() {
+      const historyContent = document.getElementById('historyContent');
+      historyContent.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+      try {
+        const response = await fetch(`${API_BASE}/api/settings/history?limit=20`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const data = await response.json();
+
+        if (data.success && data.history) {
+          document.getElementById('historyTotal').textContent = data.pagination.total;
+          document.getElementById('historyCount').textContent = data.pagination.total;
+
+          if (data.history.length === 0) {
+            historyContent.innerHTML = `
+              <div class="empty-state">
+                <div class="empty-icon">📜</div>
+                <div class="empty-title">No History Yet</div>
+                <div class="empty-desc">Settings changes will appear here</div>
+              </div>
+            `;
+            return;
+          }
+
+          const timeline = data.history.map(item => {
+            const date = new Date(item.timestamp);
+            const timeAgo = getTimeAgo(date);
+            const eventName = item.event.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+            return `
+              <div class="timeline-item">
+                <div class="timeline-dot"></div>
+                <div class="timeline-content">
+                  <div class="timeline-title">${eventName}</div>
+                  <div class="timeline-desc">${JSON.stringify(item.data || {}).substring(0, 100)}...</div>
+                  <div class="timeline-time">${timeAgo}</div>
+                </div>
+              </div>
+            `;
+          }).join('');
+
+          historyContent.innerHTML = `<div class="timeline">${timeline}</div>`;
+
+          // Update last updated
+          if (data.history.length > 0) {
+            const lastDate = new Date(data.history[0].timestamp);
+            document.getElementById('lastUpdated').textContent = lastDate.toLocaleDateString();
+            document.getElementById('lastUpdatedRelative').textContent = getTimeAgo(lastDate);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load history:', error);
+        historyContent.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">⚠️</div>
+            <div class="empty-title">Failed to Load</div>
+            <div class="empty-desc">Please try again later</div>
+          </div>
+        `;
+      }
+    }
+
+    // Load profiles from Airtable
+    async function loadProfiles() {
+      const profilesContent = document.getElementById('profilesContent');
+      profilesContent.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+      try {
+        const response = await fetch(`${API_BASE}/api/airtable/profiles`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const data = await response.json();
+
+        if (data.success && data.data) {
+          const activeCount = data.data.filter(p => p.enabled).length;
+          document.getElementById('activeProfiles').textContent = activeCount;
+          document.getElementById('profilesChange').textContent = `${data.data.length} total profiles`;
+
+          if (data.data.length === 0) {
+            profilesContent.innerHTML = `
+              <div class="empty-state">
+                <div class="empty-icon">👤</div>
+                <div class="empty-title">No Profiles</div>
+                <div class="empty-desc">Configure Airtable integration</div>
+              </div>
+            `;
+            return;
+          }
+
+          const profilesList = data.data.slice(0, 10).map(profile => {
+            const initial = profile.name ? profile.name[0].toUpperCase() : 'U';
+            const badgeClass = profile.enabled ? '' : 'inactive';
+            const badgeText = profile.enabled ? 'Active' : 'Inactive';
+
+            return `
+              <div class="profile-item">
+                <div class="profile-avatar">${initial}</div>
+                <div class="profile-info">
+                  <div class="profile-name">${profile.name || profile.displayName || 'Unknown'}</div>
+                  <div class="profile-email">${profile.email || profile.userId || ''}</div>
+                </div>
+                <span class="profile-badge ${badgeClass}">${badgeText}</span>
+              </div>
+            `;
+          }).join('');
+
+          profilesContent.innerHTML = `<div class="profile-list">${profilesList}</div>`;
+        }
+      } catch (error) {
+        console.error('Failed to load profiles:', error);
+        profilesContent.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">⚠️</div>
+            <div class="empty-title">Failed to Load</div>
+            <div class="empty-desc">Check Airtable configuration</div>
+          </div>
+        `;
+      }
+    }
+
+    // Helper: Get time ago
+    function getTimeAgo(date) {
+      const seconds = Math.floor((new Date() - date) / 1000);
+
+      const intervals = {
+        year: 31536000,
+        month: 2592000,
+        week: 604800,
+        day: 86400,
+        hour: 3600,
+        minute: 60
+      };
+
+      for (const [unit, secondsInUnit] of Object.entries(intervals)) {
+        const interval = Math.floor(seconds / secondsInUnit);
+        if (interval >= 1) {
+          return `${interval} ${unit}${interval !== 1 ? 's' : ''} ago`;
+        }
+      }
+
+      return 'Just now';
+    }
+
+    // Refresh all data
+    async function refreshData() {
+      await initDashboard();
+    }
+
+    // Export settings
+    async function exportSettings() {
+      try {
+        const response = await fetch(`${API_BASE}/api/settings`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const data = await response.json();
+
+        if (data.success) {
+          const blob = new Blob([JSON.stringify(data.settings, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `settings-${new Date().toISOString().split('T')[0]}.json`;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+      } catch (error) {
+        console.error('Failed to export settings:', error);
+        alert('Failed to export settings');
+      }
+    }
+
+    // Logout
+    function logout() {
+      localStorage.removeItem('auth_token');
+      window.location.href = '/login.html';
+    }
+
+    // Init on load
+    document.addEventListener('DOMContentLoaded', initDashboard);
+  </script>
+</body>
+</html>

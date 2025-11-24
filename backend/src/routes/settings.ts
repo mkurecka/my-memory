@@ -61,6 +61,57 @@ settings.get('/', authMiddleware, async (c) => {
   }
 });
 
+// GET /api/settings/history - Get settings change history
+settings.get('/history', authMiddleware, async (c) => {
+  try {
+    const userId = c.get('userId');
+    const limit = parseInt(c.req.query('limit') || '50');
+    const offset = parseInt(c.req.query('offset') || '0');
+
+    // Query settings history from webhooks table (where we log all changes)
+    const history = await c.env.DB
+      .prepare(`
+        SELECT id, event, data_json, created_at
+        FROM webhooks
+        WHERE user_id = ? AND event LIKE '%settings%'
+        ORDER BY created_at DESC
+        LIMIT ? OFFSET ?
+      `)
+      .bind(userId, limit, offset)
+      .all();
+
+    const historyItems = history.results?.map((row: any) => ({
+      id: row.id,
+      event: row.event,
+      data: row.data_json ? JSON.parse(row.data_json) : null,
+      timestamp: row.created_at,
+    })) || [];
+
+    // Get total count
+    const countResult = await c.env.DB
+      .prepare('SELECT COUNT(*) as total FROM webhooks WHERE user_id = ? AND event LIKE \'%settings%\'')
+      .bind(userId)
+      .first<any>();
+
+    return c.json({
+      success: true,
+      history: historyItems,
+      pagination: {
+        total: countResult?.total || 0,
+        limit,
+        offset,
+        hasMore: (offset + limit) < (countResult?.total || 0),
+      },
+    });
+  } catch (error: any) {
+    console.error('Get settings history error:', error);
+    return c.json({
+      success: false,
+      error: error.message || 'Failed to get settings history',
+    }, 500);
+  }
+});
+
 // PUT /api/settings - Update user settings
 settings.put('/', authMiddleware, async (c) => {
   try {
@@ -81,6 +132,16 @@ settings.put('/', authMiddleware, async (c) => {
       .prepare('UPDATE users SET settings_json = ? WHERE id = ?')
       .bind(settingsJson, userId)
       .run();
+
+    // Log settings change to webhooks table for history
+    try {
+      await c.env.DB
+        .prepare('INSERT INTO webhooks (event, data_json, user_id, created_at) VALUES (?, ?, ?, ?)')
+        .bind('settings_updated', JSON.stringify({ settings: newSettings }), userId, Date.now())
+        .run();
+    } catch (logError) {
+      console.error('Failed to log settings change:', logError);
+    }
 
     return c.json({
       success: true,
