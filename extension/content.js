@@ -1551,3 +1551,266 @@ async function openDatabaseViewer() {
     URL.revokeObjectURL(url);
   });
 }
+
+// ========================================
+// X/Twitter Integration - Save Tweet Button
+// ========================================
+
+/**
+ * Detects if current page is X/Twitter
+ */
+function isTwitterPage() {
+  return window.location.hostname === 'twitter.com' ||
+         window.location.hostname === 'x.com' ||
+         window.location.hostname.endsWith('.twitter.com') ||
+         window.location.hostname.endsWith('.x.com');
+}
+
+/**
+ * Extract tweet data from a tweet article element
+ */
+function extractTweetData(tweetElement) {
+  try {
+    // Find the tweet text
+    const tweetTextElement = tweetElement.querySelector('[data-testid="tweetText"]');
+    const tweetText = tweetTextElement ? tweetTextElement.innerText : '';
+
+    // Find the author
+    const authorElement = tweetElement.querySelector('[data-testid="User-Name"]');
+    const authorName = authorElement ? authorElement.innerText.split('\n')[0] : '';
+    const authorHandle = authorElement ? authorElement.querySelector('a[href^="/"]')?.getAttribute('href')?.substring(1) : '';
+
+    // Find timestamp link to get tweet URL
+    const timeElement = tweetElement.querySelector('time');
+    const timestamp = timeElement ? timeElement.getAttribute('datetime') : new Date().toISOString();
+    const tweetLink = timeElement ? timeElement.closest('a')?.getAttribute('href') : '';
+    const tweetUrl = tweetLink ? `https://x.com${tweetLink}` : window.location.href;
+
+    // Extract tweet ID from URL
+    const tweetIdMatch = tweetUrl.match(/\/status\/(\d+)/);
+    const tweetId = tweetIdMatch ? tweetIdMatch[1] : '';
+
+    // Find images
+    const images = [];
+    const imageElements = tweetElement.querySelectorAll('[data-testid="tweetPhoto"] img');
+    imageElements.forEach(img => {
+      if (img.src && !img.src.includes('profile_images')) {
+        images.push(img.src);
+      }
+    });
+
+    // Find videos
+    const videos = [];
+    const videoElements = tweetElement.querySelectorAll('video');
+    videoElements.forEach(video => {
+      if (video.src) {
+        videos.push(video.src);
+      }
+    });
+
+    // Check if it's a retweet
+    const retweetElement = tweetElement.querySelector('[data-testid="socialContext"]');
+    const isRetweet = retweetElement && retweetElement.innerText.includes('retweeted');
+
+    // Check if it's a quote tweet
+    const quoteTweetElement = tweetElement.querySelector('[data-testid="card.layoutLarge.media"]');
+    const isQuoteTweet = !!quoteTweetElement;
+
+    return {
+      tweetId,
+      text: tweetText,
+      author: {
+        name: authorName,
+        handle: authorHandle,
+        url: authorHandle ? `https://x.com/${authorHandle}` : ''
+      },
+      url: tweetUrl,
+      timestamp,
+      media: {
+        images,
+        videos,
+        hasMedia: images.length > 0 || videos.length > 0
+      },
+      metadata: {
+        isRetweet,
+        isQuoteTweet,
+        pageTitle: document.title,
+        capturedAt: new Date().toISOString()
+      }
+    };
+  } catch (error) {
+    console.error('[Universal Text Processor] Error extracting tweet data:', error);
+    return null;
+  }
+}
+
+/**
+ * Create and inject save button for a tweet
+ */
+function injectSaveTweetButton(tweetElement) {
+  // Check if button already exists
+  if (tweetElement.querySelector('.utp-save-tweet-btn')) {
+    return;
+  }
+
+  // Find the action bar (like, retweet, reply buttons)
+  const actionBar = tweetElement.querySelector('[role="group"]');
+  if (!actionBar) {
+    return;
+  }
+
+  // Create save button
+  const saveButton = document.createElement('div');
+  saveButton.className = 'utp-save-tweet-btn';
+  saveButton.style.cssText = `
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    min-height: 32px;
+    padding: 0 8px;
+    margin-left: 8px;
+    border-radius: 9999px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    background-color: transparent;
+  `;
+
+  saveButton.innerHTML = `
+    <svg viewBox="0 0 24 24" width="18" height="18" style="fill: rgb(83, 100, 113);">
+      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+      <polyline points="17 21 17 13 7 13 7 21" style="fill: rgb(239, 243, 244);"></polyline>
+      <polyline points="7 3 7 8 15 8"></polyline>
+    </svg>
+  `;
+
+  saveButton.title = 'Save tweet to Universal Text Processor';
+
+  // Hover effects
+  saveButton.addEventListener('mouseenter', () => {
+    saveButton.style.backgroundColor = 'rgba(29, 155, 240, 0.1)';
+    const svg = saveButton.querySelector('svg');
+    if (svg) svg.style.fill = 'rgb(29, 155, 240)';
+  });
+
+  saveButton.addEventListener('mouseleave', () => {
+    saveButton.style.backgroundColor = 'transparent';
+    const svg = saveButton.querySelector('svg');
+    if (svg) svg.style.fill = 'rgb(83, 100, 113)';
+  });
+
+  // Click handler
+  saveButton.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+
+    // Extract tweet data
+    const tweetData = extractTweetData(tweetElement);
+
+    if (!tweetData) {
+      console.error('[Universal Text Processor] Failed to extract tweet data');
+      return;
+    }
+
+    console.log('[Universal Text Processor] Saving tweet:', tweetData);
+
+    // Show loading state
+    const originalHTML = saveButton.innerHTML;
+    saveButton.innerHTML = `
+      <svg viewBox="0 0 24 24" width="18" height="18" style="fill: rgb(29, 155, 240);">
+        <circle cx="12" cy="12" r="10" style="fill: none; stroke: rgb(29, 155, 240); stroke-width: 2;"></circle>
+        <path d="M12 6v6l4 2" style="stroke: rgb(29, 155, 240); stroke-width: 2; fill: none;"></path>
+      </svg>
+    `;
+    saveButton.style.pointerEvents = 'none';
+
+    try {
+      // Send to background script
+      const response = await chrome.runtime.sendMessage({
+        action: 'saveTweet',
+        data: tweetData
+      });
+
+      if (response && response.success) {
+        // Show success state
+        saveButton.innerHTML = `
+          <svg viewBox="0 0 24 24" width="18" height="18" style="fill: rgb(0, 186, 124);">
+            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path>
+          </svg>
+        `;
+
+        // Reset after 2 seconds
+        setTimeout(() => {
+          saveButton.innerHTML = originalHTML;
+          saveButton.style.pointerEvents = 'auto';
+        }, 2000);
+      } else {
+        throw new Error(response?.error || 'Failed to save tweet');
+      }
+    } catch (error) {
+      console.error('[Universal Text Processor] Error saving tweet:', error);
+
+      // Show error state
+      saveButton.innerHTML = `
+        <svg viewBox="0 0 24 24" width="18" height="18" style="fill: rgb(244, 33, 46);">
+          <path d="M13.414 12l5.793-5.793c.39-.39.39-1.023 0-1.414s-1.023-.39-1.414 0L12 10.586 6.207 4.793c-.39-.39-1.023-.39-1.414 0s-.39 1.023 0 1.414L11.586 12l-5.793 5.793c-.39.39-.39 1.023 0 1.414.195.195.45.293.707.293s.512-.098.707-.293L12 13.414l5.793 5.793c.195.195.45.293.707.293s.512-.098.707-.293c.39-.39.39-1.023 0-1.414L13.414 12z"></path>
+        </svg>
+      `;
+
+      // Reset after 2 seconds
+      setTimeout(() => {
+        saveButton.innerHTML = originalHTML;
+        saveButton.style.pointerEvents = 'auto';
+      }, 2000);
+    }
+  });
+
+  // Inject button into action bar
+  actionBar.appendChild(saveButton);
+}
+
+/**
+ * Observer to watch for new tweets and inject save buttons
+ */
+function initTwitterObserver() {
+  if (!isTwitterPage()) {
+    return;
+  }
+
+  console.log('[Universal Text Processor] Initializing X/Twitter integration');
+
+  // Process existing tweets
+  const processTweets = () => {
+    const tweets = document.querySelectorAll('article[data-testid="tweet"]');
+    tweets.forEach(tweet => {
+      injectSaveTweetButton(tweet);
+    });
+  };
+
+  // Initial processing
+  setTimeout(processTweets, 2000);
+
+  // Watch for new tweets
+  const observer = new MutationObserver((mutations) => {
+    processTweets();
+  });
+
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
+
+  // Also process on scroll (for lazy-loaded tweets)
+  let scrollTimeout;
+  window.addEventListener('scroll', () => {
+    clearTimeout(scrollTimeout);
+    scrollTimeout = setTimeout(processTweets, 500);
+  });
+}
+
+// Initialize Twitter integration when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initTwitterObserver);
+} else {
+  initTwitterObserver();
+}

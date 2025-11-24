@@ -4,9 +4,10 @@
   "description": "Universal Text Processor - Chrome Extension + Cloudflare Workers Backend",
   "scripts": {
     "test": "npm run test:extension && npm run test:backend",
-    "test:extension": "npm run test:templates && npm run test:integration",
+    "test:extension": "npm run test:templates && npm run test:integration && npm run test:twitter",
     "test:templates": "node extension/tests/template-tests.js",
     "test:integration": "node extension/tests/integration-tests.js",
+    "test:twitter": "node extension/tests/twitter-integration-test.js",
     "test:backend": "node backend/tests/api-tests.js",
     "test:watch": "nodemon --watch extension --watch backend --exec npm test",
     "deploy:backend": "cd backend && npm run deploy",

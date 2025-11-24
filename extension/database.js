@@ -64,11 +64,17 @@ class PostDatabase {
   // Add a saved tweet (for later use)
   async saveTweet(tweetData) {
     return await this.addPost({
-      type: 'saved',
-      postUrl: tweetData.postUrl,
+      type: 'tweet',
       originalText: tweetData.text,
-      author: tweetData.author,
-      comment: tweetData.comment || 'Saved for later'
+      context: {
+        tweetId: tweetData.tweetId,
+        url: tweetData.url,
+        author: tweetData.author,
+        timestamp: tweetData.timestamp,
+        media: tweetData.media,
+        metadata: tweetData.metadata
+      },
+      status: 'pending'
     });
   }
 
