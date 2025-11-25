@@ -713,13 +713,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
             // Worker returns JSON with R2 URL, not binary image
             const responseData = await imageResponse.json();
+            console.log(`[Visual Content] Response for ${imageType}:`, JSON.stringify(responseData));
 
-            if (!responseData.success || !responseData.data?.url) {
+            // Handle both direct response and proxy-wrapped response
+            // Proxy returns: {success, data: {success, data: {url}}}
+            // Direct returns: {success, data: {url}}
+            let imageUrl;
+            if (responseData.data?.data?.url) {
+              // Proxy-wrapped response
+              imageUrl = responseData.data.data.url;
+            } else if (responseData.data?.url) {
+              // Direct response
+              imageUrl = responseData.data.url;
+            } else {
               console.error(`Invalid response for ${imageType}:`, responseData);
               continue;
             }
-
-            const imageUrl = responseData.data.url;
 
             images.push({
               type: imageType,
