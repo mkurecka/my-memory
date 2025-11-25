@@ -13,6 +13,28 @@ import type {
 } from '../types';
 
 const AIRTABLE_API_BASE = 'https://api.airtable.com/v0';
+const AIRTABLE_META_API = 'https://api.airtable.com/v0/meta';
+
+export interface AirtableTable {
+  id: string;
+  name: string;
+  primaryFieldId: string;
+  fields: AirtableField[];
+  recordCount?: number;
+}
+
+export interface AirtableField {
+  id: string;
+  name: string;
+  type: string;
+  options?: any;
+}
+
+export interface AirtableRecord {
+  id: string;
+  fields: Record<string, any>;
+  createdTime?: string;
+}
 
 export class AirtableService {
   private env: Env;
@@ -457,5 +479,200 @@ export class AirtableService {
       console.error('[Airtable] Health check failed:', error);
       return false;
     }
+  }
+
+  // ============================================
+  // DYNAMIC TABLE METHODS
+  // ============================================
+
+  /**
+   * Make authenticated request to Airtable Metadata API
+   */
+  private async metaFetch(endpoint: string): Promise<any> {
+    if (!this.env.AIRTABLE_API_KEY) {
+      throw new Error('Airtable API key not configured');
+    }
+
+    const url = `${AIRTABLE_META_API}/${endpoint}`;
+
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${this.env.AIRTABLE_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error(`[Airtable] Meta API error: ${response.status}`, error);
+      throw new Error(`Airtable Meta API error: ${response.status} - ${error}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * List all tables in the base with their schemas
+   */
+  async listTables(useCache = true): Promise<AirtableTable[]> {
+    if (!this.isConfigured()) {
+      console.log('[Airtable] Not configured, returning empty tables');
+      return [];
+    }
+
+    const cacheKey = this.getCacheKey('tables');
+
+    if (useCache) {
+      const cached = await this.getFromCache<AirtableTable[]>(cacheKey);
+      if (cached) return cached;
+    }
+
+    try {
+      console.log('[Airtable] Fetching tables from Airtable Metadata API');
+      const result = await this.metaFetch(`bases/${this.config.baseId}/tables`);
+
+      const tables: AirtableTable[] = (result.tables || []).map((t: any) => ({
+        id: t.id,
+        name: t.name,
+        primaryFieldId: t.primaryFieldId,
+        fields: (t.fields || []).map((f: any) => ({
+          id: f.id,
+          name: f.name,
+          type: f.type,
+          options: f.options
+        }))
+      }));
+
+      await this.setCache(cacheKey, tables);
+      console.log(`[Airtable] Fetched ${tables.length} tables`);
+      return tables;
+    } catch (error: any) {
+      console.error('[Airtable] Error fetching tables:', error);
+      throw new Error(`Failed to fetch tables: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get table schema by name or ID
+   */
+  async getTable(tableNameOrId: string, useCache = true): Promise<AirtableTable | null> {
+    const tables = await this.listTables(useCache);
+    return tables.find(t => t.id === tableNameOrId || t.name === tableNameOrId) || null;
+  }
+
+  /**
+   * List records from any table with optional filtering
+   */
+  async listTableRecords(
+    tableNameOrId: string,
+    options: {
+      maxRecords?: number;
+      filterByFormula?: string;
+      sort?: { field: string; direction: 'asc' | 'desc' }[];
+      fields?: string[];
+      useCache?: boolean;
+    } = {}
+  ): Promise<AirtableRecord[]> {
+    if (!this.isConfigured()) {
+      return [];
+    }
+
+    const { maxRecords, filterByFormula, sort, fields, useCache = true } = options;
+    const cacheKey = this.getCacheKey('table-records', `${tableNameOrId}:${JSON.stringify(options)}`);
+
+    if (useCache) {
+      const cached = await this.getFromCache<AirtableRecord[]>(cacheKey);
+      if (cached) return cached;
+    }
+
+    try {
+      console.log(`[Airtable] Fetching records from table: ${tableNameOrId}`);
+      const tableName = encodeURIComponent(tableNameOrId);
+
+      // Build query params
+      const params = new URLSearchParams();
+      if (maxRecords) params.append('maxRecords', maxRecords.toString());
+      if (filterByFormula) params.append('filterByFormula', filterByFormula);
+      if (fields) fields.forEach(f => params.append('fields[]', f));
+      if (sort) {
+        sort.forEach((s, i) => {
+          params.append(`sort[${i}][field]`, s.field);
+          params.append(`sort[${i}][direction]`, s.direction);
+        });
+      }
+
+      const queryString = params.toString();
+      const endpoint = queryString ? `${tableName}?${queryString}` : tableName;
+
+      const result = await this.airtableFetch(endpoint);
+
+      const records: AirtableRecord[] = (result.records || []).map((r: any) => ({
+        id: r.id,
+        fields: r.fields || {},
+        createdTime: r.createdTime
+      }));
+
+      await this.setCache(cacheKey, records, 300); // 5 minute cache for records
+      console.log(`[Airtable] Fetched ${records.length} records from ${tableNameOrId}`);
+      return records;
+    } catch (error: any) {
+      console.error(`[Airtable] Error fetching records from ${tableNameOrId}:`, error);
+      throw new Error(`Failed to fetch records: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get a single record by ID from any table
+   */
+  async getTableRecord(tableNameOrId: string, recordId: string, useCache = true): Promise<AirtableRecord | null> {
+    if (!this.isConfigured()) return null;
+
+    const cacheKey = this.getCacheKey('table-record', `${tableNameOrId}:${recordId}`);
+
+    if (useCache) {
+      const cached = await this.getFromCache<AirtableRecord>(cacheKey);
+      if (cached) return cached;
+    }
+
+    try {
+      console.log(`[Airtable] Fetching record ${recordId} from ${tableNameOrId}`);
+      const tableName = encodeURIComponent(tableNameOrId);
+      const result = await this.airtableFetch(`${tableName}/${recordId}`);
+
+      const record: AirtableRecord = {
+        id: result.id,
+        fields: result.fields || {},
+        createdTime: result.createdTime
+      };
+
+      await this.setCache(cacheKey, record);
+      return record;
+    } catch (error: any) {
+      console.error(`[Airtable] Error fetching record ${recordId}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Get summary of all tables with record counts
+   */
+  async getTablesSummary(useCache = true): Promise<{ tables: AirtableTable[]; totalRecords: number }> {
+    const tables = await this.listTables(useCache);
+
+    // Fetch record counts for each table in parallel
+    const tablesWithCounts = await Promise.all(
+      tables.map(async (table) => {
+        try {
+          const records = await this.listTableRecords(table.name, { maxRecords: 100, useCache });
+          return { ...table, recordCount: records.length };
+        } catch {
+          return { ...table, recordCount: 0 };
+        }
+      })
+    );
+
+    const totalRecords = tablesWithCounts.reduce((sum, t) => sum + (t.recordCount || 0), 0);
+
+    return { tables: tablesWithCounts, totalRecords };
   }
 }

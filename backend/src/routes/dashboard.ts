@@ -159,6 +159,7 @@ router.get('/profiles', async (c) => {
   try {
     const airtable = new AirtableService(c.env);
     const configured = airtable.isConfigured();
+    const airtableBaseId = c.env.AIRTABLE_BASE_ID || '';
 
     let profilesCount = 0;
     let websitesCount = 0;
@@ -176,7 +177,7 @@ router.get('/profiles', async (c) => {
       }
     }
 
-    const html = profilesPage({ profilesCount, websitesCount, apiBase, configured });
+    const html = profilesPage({ profilesCount, websitesCount, apiBase, configured, airtableBaseId });
     return c.html(html);
 
   } catch (error: any) {

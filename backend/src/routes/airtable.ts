@@ -335,4 +335,157 @@ app.get('/health', async (c) => {
   }
 });
 
+// ============================================
+// DYNAMIC TABLE ROUTES
+// ============================================
+
+/**
+ * GET /api/airtable/tables
+ * List all tables in the Airtable base
+ */
+app.get('/tables', async (c) => {
+  try {
+    const airtable = new AirtableService(c.env);
+    const noCache = c.req.query('noCache') === 'true';
+
+    const tables = await airtable.listTables(!noCache);
+
+    return c.json<ApiResponse>({
+      success: true,
+      data: tables,
+      message: `Retrieved ${tables.length} tables`
+    });
+  } catch (err: any) {
+    console.error('[Airtable Routes] Error listing tables:', err);
+    return c.json<ApiResponse>({
+      success: false,
+      error: err.message || 'Failed to list tables'
+    }, 500);
+  }
+});
+
+/**
+ * GET /api/airtable/tables/summary
+ * Get summary of all tables with record counts
+ */
+app.get('/tables/summary', async (c) => {
+  try {
+    const airtable = new AirtableService(c.env);
+    const noCache = c.req.query('noCache') === 'true';
+
+    const summary = await airtable.getTablesSummary(!noCache);
+
+    return c.json<ApiResponse>({
+      success: true,
+      data: summary,
+      message: `Retrieved ${summary.tables.length} tables with ${summary.totalRecords} total records`
+    });
+  } catch (err: any) {
+    console.error('[Airtable Routes] Error getting tables summary:', err);
+    return c.json<ApiResponse>({
+      success: false,
+      error: err.message || 'Failed to get tables summary'
+    }, 500);
+  }
+});
+
+/**
+ * GET /api/airtable/tables/:tableId
+ * Get table schema by ID or name
+ */
+app.get('/tables/:tableId', async (c) => {
+  try {
+    const tableId = c.req.param('tableId');
+    const airtable = new AirtableService(c.env);
+    const noCache = c.req.query('noCache') === 'true';
+
+    const table = await airtable.getTable(tableId, !noCache);
+
+    if (!table) {
+      return c.json<ApiResponse>({
+        success: false,
+        error: 'Not Found',
+        message: `Table ${tableId} not found`
+      }, 404);
+    }
+
+    return c.json<ApiResponse>({
+      success: true,
+      data: table
+    });
+  } catch (err: any) {
+    console.error('[Airtable Routes] Error fetching table:', err);
+    return c.json<ApiResponse>({
+      success: false,
+      error: err.message || 'Failed to fetch table'
+    }, 500);
+  }
+});
+
+/**
+ * GET /api/airtable/tables/:tableId/records
+ * List records from a specific table
+ */
+app.get('/tables/:tableId/records', async (c) => {
+  try {
+    const tableId = c.req.param('tableId');
+    const airtable = new AirtableService(c.env);
+    const noCache = c.req.query('noCache') === 'true';
+    const maxRecords = parseInt(c.req.query('maxRecords') || '100');
+    const filterByFormula = c.req.query('filter');
+
+    const records = await airtable.listTableRecords(tableId, {
+      maxRecords,
+      filterByFormula,
+      useCache: !noCache
+    });
+
+    return c.json<ApiResponse>({
+      success: true,
+      data: records,
+      message: `Retrieved ${records.length} records from ${tableId}`
+    });
+  } catch (err: any) {
+    console.error('[Airtable Routes] Error listing records:', err);
+    return c.json<ApiResponse>({
+      success: false,
+      error: err.message || 'Failed to list records'
+    }, 500);
+  }
+});
+
+/**
+ * GET /api/airtable/tables/:tableId/records/:recordId
+ * Get a specific record from a table
+ */
+app.get('/tables/:tableId/records/:recordId', async (c) => {
+  try {
+    const tableId = c.req.param('tableId');
+    const recordId = c.req.param('recordId');
+    const airtable = new AirtableService(c.env);
+    const noCache = c.req.query('noCache') === 'true';
+
+    const record = await airtable.getTableRecord(tableId, recordId, !noCache);
+
+    if (!record) {
+      return c.json<ApiResponse>({
+        success: false,
+        error: 'Not Found',
+        message: `Record ${recordId} not found in ${tableId}`
+      }, 404);
+    }
+
+    return c.json<ApiResponse>({
+      success: true,
+      data: record
+    });
+  } catch (err: any) {
+    console.error('[Airtable Routes] Error fetching record:', err);
+    return c.json<ApiResponse>({
+      success: false,
+      error: err.message || 'Failed to fetch record'
+    }, 500);
+  }
+});
+
 export default app;

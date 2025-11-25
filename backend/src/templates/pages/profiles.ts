@@ -1,5 +1,5 @@
 /**
- * Profiles page - displays Airtable user profiles and websites
+ * Profiles page - displays ALL Airtable tables dynamically
  */
 
 import { baseLayout } from '../layouts/base';
@@ -12,20 +12,19 @@ export interface ProfilesPageProps {
   websitesCount: number;
   apiBase: string;
   configured: boolean;
+  airtableBaseId?: string;
 }
 
-export function profilesPage({ profilesCount, websitesCount, apiBase, configured }: ProfilesPageProps): string {
-  const totalCount = profilesCount + websitesCount;
-
+export function profilesPage({ apiBase, configured, airtableBaseId }: ProfilesPageProps): string {
   const content = `
     ${nav({ currentPage: '/dashboard/profiles', apiBase })}
 
     <div class="container">
       ${pageHeader({
-        title: 'Airtable Profiles',
-        subtitle: 'User profiles and websites synced from Airtable',
-        icon: '👤',
-        count: totalCount,
+        title: 'Airtable Data',
+        subtitle: 'All tables from your Airtable base',
+        icon: '📊',
+        count: 0,
         backLink: '/dashboard'
       })}
 
@@ -39,57 +38,42 @@ export function profilesPage({ profilesCount, websitesCount, apiBase, configured
         </div>
       ` : ''}
 
-      <!-- Tabs -->
-      <div class="tabs">
-        <button class="tab active" data-tab="profiles">
-          <span class="tab-icon">👤</span>
-          Profiles
-          <span class="tab-count">${profilesCount}</span>
-        </button>
-        <button class="tab" data-tab="websites">
-          <span class="tab-icon">🌐</span>
-          Websites
-          <span class="tab-count">${websitesCount}</span>
-        </button>
+      <!-- Dynamic Tabs Container -->
+      <div id="tabs-container" class="tabs">
+        <div class="loading-inline">Loading tables...</div>
       </div>
 
       <!-- Toolbar -->
       <div class="toolbar">
         <div class="search-box">
-          <input type="text" id="search-input" placeholder="Search profiles..." />
+          <input type="text" id="search-input" placeholder="Search records..." />
           <span class="search-icon">🔍</span>
         </div>
         <div class="toolbar-actions">
-          <button id="sync-btn" class="btn-primary" ${!configured ? 'disabled' : ''}>
-            🔄 Sync from Airtable
+          <select id="max-records" class="select-input">
+            <option value="25">25 records</option>
+            <option value="50">50 records</option>
+            <option value="100" selected>100 records</option>
+            <option value="500">500 records</option>
+          </select>
+          <button id="refresh-btn" class="btn-secondary" ${!configured ? 'disabled' : ''}>
+            🔄 Refresh
           </button>
         </div>
       </div>
 
-      <!-- Profiles Tab Content -->
-      <div id="profiles-tab" class="tab-content active">
-        <div id="profiles-container">
-          ${profilesCount === 0 ? emptyState({
-            title: 'No Profiles Found',
-            message: configured ? 'Sync from Airtable to load user profiles.' : 'Configure Airtable to see profiles.',
-            icon: '👤'
-          }) : '<div class="loading-container"><div class="loading"></div></div>'}
-        </div>
+      <!-- Dynamic Content Container -->
+      <div id="content-container">
+        ${configured ? '<div class="loading-container"><div class="loading"></div></div>' :
+          emptyState({
+            title: 'Airtable Not Configured',
+            message: 'Configure Airtable credentials to view data.',
+            icon: '⚙️'
+          })}
       </div>
 
-      <!-- Websites Tab Content -->
-      <div id="websites-tab" class="tab-content">
-        <div id="websites-container">
-          ${websitesCount === 0 ? emptyState({
-            title: 'No Websites Found',
-            message: configured ? 'Sync from Airtable to load websites.' : 'Configure Airtable to see websites.',
-            icon: '🌐'
-          }) : '<div class="loading-container"><div class="loading"></div></div>'}
-        </div>
-      </div>
-
-      <!-- Sync Status -->
-      <div id="sync-status" class="sync-status" style="display: none;"></div>
+      <!-- Status Toast -->
+      <div id="status-toast" class="status-toast" style="display: none;"></div>
     </div>
   `;
 
@@ -106,9 +90,7 @@ export function profilesPage({ profilesCount, websitesCount, apiBase, configured
         margin-bottom: 1.5rem;
       }
 
-      .warning-icon {
-        font-size: 1.5rem;
-      }
+      .warning-icon { font-size: 1.5rem; }
 
       .warning-content strong {
         display: block;
@@ -124,30 +106,38 @@ export function profilesPage({ profilesCount, websitesCount, apiBase, configured
 
       .tabs {
         display: flex;
-        gap: 0.5rem;
+        gap: 0.25rem;
         margin-bottom: 1.5rem;
         border-bottom: 1px solid var(--border);
         padding-bottom: 0;
+        flex-wrap: wrap;
+        min-height: 42px;
+        align-items: center;
+      }
+
+      .loading-inline {
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+        padding: 0.5rem 1rem;
       }
 
       .tab {
         display: flex;
         align-items: center;
-        gap: 0.5rem;
-        padding: 0.75rem 1.25rem;
+        gap: 0.35rem;
+        padding: 0.5rem 0.75rem;
         background: none;
         border: none;
         border-bottom: 2px solid transparent;
-        font-size: 0.875rem;
+        font-size: 0.8rem;
         font-weight: 500;
         color: var(--text-secondary);
         cursor: pointer;
         transition: all 0.2s;
+        white-space: nowrap;
       }
 
-      .tab:hover {
-        color: var(--text-primary);
-      }
+      .tab:hover { color: var(--text-primary); }
 
       .tab.active {
         color: var(--primary);
@@ -156,22 +146,14 @@ export function profilesPage({ profilesCount, websitesCount, apiBase, configured
 
       .tab-count {
         background: var(--background);
-        padding: 0.125rem 0.5rem;
+        padding: 0.1rem 0.4rem;
         border-radius: 99px;
-        font-size: 0.75rem;
+        font-size: 0.7rem;
       }
 
       .tab.active .tab-count {
         background: var(--primary-light);
         color: var(--primary);
-      }
-
-      .tab-content {
-        display: none;
-      }
-
-      .tab-content.active {
-        display: block;
       }
 
       .toolbar {
@@ -215,11 +197,20 @@ export function profilesPage({ profilesCount, websitesCount, apiBase, configured
         gap: 0.75rem;
       }
 
-      .btn-primary {
+      .select-input {
+        padding: 0.75rem 1rem;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-size: 0.875rem;
+        background: var(--surface);
+        cursor: pointer;
+      }
+
+      .btn-secondary {
         padding: 0.75rem 1.25rem;
-        background: var(--primary);
-        color: white;
-        border: none;
+        background: var(--surface);
+        color: var(--text-primary);
+        border: 1px solid var(--border);
         border-radius: 8px;
         font-size: 0.875rem;
         font-weight: 500;
@@ -227,11 +218,11 @@ export function profilesPage({ profilesCount, websitesCount, apiBase, configured
         transition: all 0.2s;
       }
 
-      .btn-primary:hover:not(:disabled) {
-        opacity: 0.9;
+      .btn-secondary:hover:not(:disabled) {
+        background: var(--background);
       }
 
-      .btn-primary:disabled {
+      .btn-secondary:disabled {
         opacity: 0.5;
         cursor: not-allowed;
       }
@@ -242,155 +233,167 @@ export function profilesPage({ profilesCount, websitesCount, apiBase, configured
         padding: 3rem;
       }
 
-      .profiles-grid, .websites-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-        gap: 1rem;
-      }
-
-      .profile-card, .website-card {
+      /* Table Styles */
+      .records-table {
+        width: 100%;
+        border-collapse: collapse;
         background: var(--surface);
-        border-radius: 12px;
+        border-radius: 8px;
         overflow: hidden;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        border: 1px solid var(--border);
       }
 
-      .card-header {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        padding: 1rem;
+      .records-table th {
         background: var(--background);
-        border-bottom: 1px solid var(--border);
-      }
-
-      .profile-avatar {
-        width: 48px;
-        height: 48px;
-        border-radius: 50%;
-        background: var(--primary-light);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.5rem;
-        color: var(--primary);
-      }
-
-      .profile-avatar img {
-        width: 100%;
-        height: 100%;
-        border-radius: 50%;
-        object-fit: cover;
-      }
-
-      .card-title {
-        flex: 1;
-      }
-
-      .card-title h3 {
-        margin: 0;
-        font-size: 1rem;
+        padding: 0.75rem 1rem;
+        text-align: left;
+        font-size: 0.75rem;
         font-weight: 600;
-        color: var(--text-primary);
-      }
-
-      .card-title p {
-        margin: 0.25rem 0 0;
-        font-size: 0.8rem;
         color: var(--text-secondary);
-      }
-
-      .status-badge {
-        padding: 0.25rem 0.75rem;
-        border-radius: 99px;
-        font-size: 0.7rem;
-        font-weight: 600;
         text-transform: uppercase;
-      }
-
-      .status-enabled {
-        background: #dcfce7;
-        color: #16a34a;
-      }
-
-      .status-disabled {
-        background: #fee2e2;
-        color: #dc2626;
-      }
-
-      .card-body {
-        padding: 1rem;
-      }
-
-      .card-row {
-        display: flex;
-        justify-content: space-between;
-        padding: 0.5rem 0;
+        letter-spacing: 0.05em;
         border-bottom: 1px solid var(--border);
-        font-size: 0.875rem;
+        white-space: nowrap;
       }
 
-      .card-row:last-child {
+      .records-table td {
+        padding: 0.75rem 1rem;
+        font-size: 0.875rem;
+        border-bottom: 1px solid var(--border);
+        max-width: 300px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .records-table tr:last-child td {
         border-bottom: none;
       }
 
-      .card-label {
+      .records-table tr:hover {
+        background: var(--background);
+      }
+
+      .cell-actions {
+        width: 40px;
+        text-align: center;
+      }
+
+      .airtable-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        background: var(--primary-light);
+        color: var(--primary);
+        border-radius: 6px;
+        font-size: 0.9rem;
+        text-decoration: none;
+        transition: all 0.2s;
+      }
+
+      .airtable-link:hover {
+        background: var(--primary);
+        color: white;
+      }
+
+      .cell-id {
+        font-family: monospace;
+        font-size: 0.75rem;
         color: var(--text-secondary);
       }
 
-      .card-value {
-        color: var(--text-primary);
-        font-weight: 500;
-        text-align: right;
+      .cell-json {
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--primary);
+        cursor: pointer;
       }
 
-      .accounts-list {
+      .cell-json:hover {
+        text-decoration: underline;
+      }
+
+      .cell-link {
+        color: var(--primary);
+        cursor: pointer;
+      }
+
+      .cell-link:hover {
+        text-decoration: underline;
+      }
+
+      .cell-array {
         display: flex;
         flex-wrap: wrap;
         gap: 0.25rem;
-        justify-content: flex-end;
       }
 
-      .account-tag {
+      .array-tag {
         background: var(--primary-light);
         color: var(--primary);
-        padding: 0.125rem 0.5rem;
+        padding: 0.1rem 0.4rem;
         border-radius: 4px;
-        font-size: 0.75rem;
+        font-size: 0.7rem;
       }
 
-      .branding-colors {
-        display: flex;
-        gap: 0.25rem;
-        justify-content: flex-end;
-      }
-
-      .color-swatch {
-        width: 20px;
-        height: 20px;
-        border-radius: 4px;
-        border: 1px solid var(--border);
-      }
-
-      .social-profiles {
-        display: flex;
-        gap: 0.5rem;
-        flex-wrap: wrap;
-        justify-content: flex-end;
-      }
-
-      .social-badge {
-        display: flex;
+      .cell-boolean {
+        display: inline-flex;
         align-items: center;
         gap: 0.25rem;
+      }
+
+      .bool-true {
+        color: #16a34a;
+      }
+
+      .bool-false {
+        color: #dc2626;
+      }
+
+      /* Schema Info */
+      .schema-info {
         background: var(--background);
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        font-size: 0.8rem;
+      }
+
+      .schema-info summary {
+        cursor: pointer;
+        font-weight: 500;
+        color: var(--text-secondary);
+      }
+
+      .schema-fields {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 0.5rem;
+        margin-top: 0.75rem;
+      }
+
+      .schema-field {
+        display: flex;
+        justify-content: space-between;
         padding: 0.25rem 0.5rem;
+        background: var(--surface);
         border-radius: 4px;
+      }
+
+      .field-name {
+        font-weight: 500;
+      }
+
+      .field-type {
+        color: var(--text-secondary);
         font-size: 0.75rem;
       }
 
-      .sync-status {
+      .status-toast {
         position: fixed;
         bottom: 2rem;
         right: 2rem;
@@ -402,17 +405,9 @@ export function profilesPage({ profilesCount, websitesCount, apiBase, configured
         z-index: 1000;
       }
 
-      .sync-status.success {
-        border-left: 4px solid #16a34a;
-      }
-
-      .sync-status.error {
-        border-left: 4px solid #dc2626;
-      }
-
-      .sync-status.loading {
-        border-left: 4px solid var(--primary);
-      }
+      .status-toast.success { border-left: 4px solid #16a34a; }
+      .status-toast.error { border-left: 4px solid #dc2626; }
+      .status-toast.loading { border-left: 4px solid var(--primary); }
 
       .no-results {
         text-align: center;
@@ -420,10 +415,75 @@ export function profilesPage({ profilesCount, websitesCount, apiBase, configured
         color: var(--text-secondary);
       }
 
+      .table-wrapper {
+        overflow-x: auto;
+      }
+
+      /* JSON Modal */
+      .json-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 2000;
+      }
+
+      .json-modal-content {
+        background: var(--surface);
+        border-radius: 12px;
+        max-width: 800px;
+        max-height: 80vh;
+        width: 90%;
+        overflow: hidden;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+      }
+
+      .json-modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .json-modal-header h3 {
+        margin: 0;
+        font-size: 1rem;
+      }
+
+      .json-modal-close {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        cursor: pointer;
+        color: var(--text-secondary);
+      }
+
+      .json-modal-body {
+        padding: 1.5rem;
+        overflow: auto;
+        max-height: calc(80vh - 60px);
+      }
+
+      .json-modal-body pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        font-size: 0.8rem;
+        line-height: 1.5;
+      }
+
       @media (max-width: 768px) {
-        .profiles-grid, .websites-grid {
-          grid-template-columns: 1fr;
-        }
+        .tabs { gap: 0.15rem; }
+        .tab { padding: 0.4rem 0.5rem; font-size: 0.75rem; }
+        .tab-count { display: none; }
+        .records-table { font-size: 0.8rem; }
+        .records-table th, .records-table td { padding: 0.5rem; }
       }
     </style>
   `;
@@ -432,290 +492,303 @@ export function profilesPage({ profilesCount, websitesCount, apiBase, configured
     <script>
       const API_BASE = '${apiBase}';
       const CONFIGURED = ${configured};
-      let currentTab = 'profiles';
+      const AIRTABLE_BASE_ID = '${airtableBaseId || ''}';
+      let tables = [];
+      let currentTable = null;
+      let currentRecords = [];
       let currentSearch = '';
-      let profilesData = [];
-      let websitesData = [];
 
-      // Tab switching
-      document.querySelectorAll('.tab').forEach(tab => {
-        tab.addEventListener('click', function() {
-          const tabName = this.dataset.tab;
-          switchTab(tabName);
-        });
-      });
-
-      function switchTab(tabName) {
-        currentTab = tabName;
-
-        // Update tab buttons
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        document.querySelector('[data-tab="' + tabName + '"]').classList.add('active');
-
-        // Update tab content
-        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-        document.getElementById(tabName + '-tab').classList.add('active');
-
-        // Update search placeholder
-        document.getElementById('search-input').placeholder = 'Search ' + tabName + '...';
+      // Initialize
+      if (CONFIGURED) {
+        loadTables();
       }
 
-      // Search
+      // Event listeners
       document.getElementById('search-input').addEventListener('input', debounce(function(e) {
         currentSearch = e.target.value.toLowerCase();
-        if (currentTab === 'profiles') {
-          renderProfiles(filterProfiles(profilesData));
-        } else {
-          renderWebsites(filterWebsites(websitesData));
-        }
+        renderRecords(filterRecords(currentRecords));
       }, 300));
 
-      // Sync button
-      document.getElementById('sync-btn').addEventListener('click', async function() {
-        if (!CONFIGURED) return;
-        await syncFromAirtable();
+      document.getElementById('refresh-btn').addEventListener('click', function() {
+        if (currentTable) {
+          loadRecords(currentTable.id, true);
+        }
       });
 
-      function filterProfiles(profiles) {
-        if (!currentSearch) return profiles;
-        return profiles.filter(p =>
-          (p.name || '').toLowerCase().includes(currentSearch) ||
-          (p.displayName || '').toLowerCase().includes(currentSearch) ||
-          (p.email || '').toLowerCase().includes(currentSearch) ||
-          (p.userId || '').toLowerCase().includes(currentSearch)
-        );
-      }
+      document.getElementById('max-records').addEventListener('change', function() {
+        if (currentTable) {
+          loadRecords(currentTable.id, true);
+        }
+      });
 
-      function filterWebsites(websites) {
-        if (!currentSearch) return websites;
-        return websites.filter(w =>
-          (w.name || '').toLowerCase().includes(currentSearch) ||
-          (w.domain || '').toLowerCase().includes(currentSearch) ||
-          (w.websiteId || '').toLowerCase().includes(currentSearch)
-        );
-      }
-
-      async function loadProfiles() {
-        if (!CONFIGURED) return;
-
-        const container = document.getElementById('profiles-container');
-        container.innerHTML = '<div class="loading-container"><div class="loading"></div></div>';
-
+      async function loadTables() {
         try {
-          const response = await fetch(API_BASE + '/api/airtable/profiles');
+          const response = await fetch(API_BASE + '/api/airtable/tables/summary?noCache=true');
           const data = await response.json();
 
           if (data.success && data.data) {
-            profilesData = data.data;
-            renderProfiles(profilesData);
+            tables = data.data.tables;
+            renderTabs(tables);
+
+            // Update page header count
+            const totalRecords = data.data.totalRecords || 0;
+            const countEl = document.querySelector('.header-count');
+            if (countEl) countEl.textContent = totalRecords;
+
+            // Select first table by default
+            if (tables.length > 0) {
+              selectTable(tables[0].id);
+            }
           } else {
-            container.innerHTML = '<div class="no-results"><p>' + (data.error || 'Failed to load profiles') + '</p></div>';
+            showError('Failed to load tables');
           }
         } catch (error) {
-          console.error('Failed to load profiles:', error);
-          container.innerHTML = '<div class="no-results"><p>Failed to load profiles</p></div>';
+          console.error('Failed to load tables:', error);
+          showError('Failed to load tables: ' + error.message);
         }
       }
 
-      async function loadWebsites() {
-        if (!CONFIGURED) return;
+      function renderTabs(tables) {
+        const container = document.getElementById('tabs-container');
 
-        const container = document.getElementById('websites-container');
-        container.innerHTML = '<div class="loading-container"><div class="loading"></div></div>';
-
-        try {
-          const response = await fetch(API_BASE + '/api/airtable/websites');
-          const data = await response.json();
-
-          if (data.success && data.data) {
-            websitesData = data.data;
-            renderWebsites(websitesData);
-          } else {
-            container.innerHTML = '<div class="no-results"><p>' + (data.error || 'Failed to load websites') + '</p></div>';
-          }
-        } catch (error) {
-          console.error('Failed to load websites:', error);
-          container.innerHTML = '<div class="no-results"><p>Failed to load websites</p></div>';
-        }
-      }
-
-      function renderProfiles(profiles) {
-        const container = document.getElementById('profiles-container');
-
-        if (!profiles || profiles.length === 0) {
-          container.innerHTML = '<div class="no-results"><p>No profiles found</p></div>';
+        if (!tables || tables.length === 0) {
+          container.innerHTML = '<div class="loading-inline">No tables found</div>';
           return;
         }
 
-        const html = profiles.map(profile => {
-          const initials = (profile.name || 'U').charAt(0).toUpperCase();
-          const accounts = profile.accounts || [];
-          const colors = profile.brandingColors || {};
+        container.innerHTML = tables.map(table => \`
+          <button class="tab" data-table-id="\${table.id}" title="\${table.name}">
+            \${getTableIcon(table.name)}
+            <span class="tab-name">\${table.name}</span>
+            <span class="tab-count">\${table.recordCount || 0}</span>
+          </button>
+        \`).join('');
 
-          return \`
-            <div class="profile-card">
-              <div class="card-header">
-                <div class="profile-avatar">
-                  \${profile.logoUrl ? \`<img src="\${profile.logoUrl}" alt="\${profile.name}">\` : initials}
-                </div>
-                <div class="card-title">
-                  <h3>\${profile.name || 'Unnamed'}</h3>
-                  <p>\${profile.displayName || profile.email || profile.userId || ''}</p>
-                </div>
-                <span class="status-badge \${profile.enabled ? 'status-enabled' : 'status-disabled'}">
-                  \${profile.enabled ? 'Active' : 'Disabled'}
-                </span>
-              </div>
-              <div class="card-body">
-                \${profile.userId ? \`
-                  <div class="card-row">
-                    <span class="card-label">User ID</span>
-                    <span class="card-value">\${profile.userId}</span>
-                  </div>
-                \` : ''}
-                \${profile.defaultLanguage ? \`
-                  <div class="card-row">
-                    <span class="card-label">Language</span>
-                    <span class="card-value">\${profile.defaultLanguage}</span>
-                  </div>
-                \` : ''}
-                \${accounts.length > 0 ? \`
-                  <div class="card-row">
-                    <span class="card-label">Accounts</span>
-                    <div class="accounts-list">
-                      \${accounts.map(a => \`<span class="account-tag">\${a}</span>\`).join('')}
-                    </div>
-                  </div>
-                \` : ''}
-                \${Object.keys(colors).length > 0 ? \`
-                  <div class="card-row">
-                    <span class="card-label">Branding</span>
-                    <div class="branding-colors">
-                      \${colors.primary ? \`<div class="color-swatch" style="background: \${colors.primary}" title="Primary"></div>\` : ''}
-                      \${colors.secondary ? \`<div class="color-swatch" style="background: \${colors.secondary}" title="Secondary"></div>\` : ''}
-                      \${colors.accent ? \`<div class="color-swatch" style="background: \${colors.accent}" title="Accent"></div>\` : ''}
-                    </div>
-                  </div>
-                \` : ''}
-              </div>
-            </div>
-          \`;
-        }).join('');
-
-        container.innerHTML = '<div class="profiles-grid">' + html + '</div>';
-      }
-
-      function renderWebsites(websites) {
-        const container = document.getElementById('websites-container');
-
-        if (!websites || websites.length === 0) {
-          container.innerHTML = '<div class="no-results"><p>No websites found</p></div>';
-          return;
-        }
-
-        const html = websites.map(website => {
-          const socials = website.socialProfiles || [];
-
-          return \`
-            <div class="website-card">
-              <div class="card-header">
-                <div class="profile-avatar">🌐</div>
-                <div class="card-title">
-                  <h3>\${website.name || 'Unnamed'}</h3>
-                  <p>\${website.domain || ''}</p>
-                </div>
-                <span class="status-badge \${website.enabled ? 'status-enabled' : 'status-disabled'}">
-                  \${website.enabled ? 'Active' : 'Disabled'}
-                </span>
-              </div>
-              <div class="card-body">
-                \${website.websiteId ? \`
-                  <div class="card-row">
-                    <span class="card-label">Website ID</span>
-                    <span class="card-value">\${website.websiteId}</span>
-                  </div>
-                \` : ''}
-                \${website.userId ? \`
-                  <div class="card-row">
-                    <span class="card-label">Owner</span>
-                    <span class="card-value">\${website.userId}</span>
-                  </div>
-                \` : ''}
-                \${website.schedulingWebhook ? \`
-                  <div class="card-row">
-                    <span class="card-label">Webhook</span>
-                    <span class="card-value" style="font-size: 0.75rem;">Configured</span>
-                  </div>
-                \` : ''}
-                \${socials.length > 0 ? \`
-                  <div class="card-row">
-                    <span class="card-label">Social</span>
-                    <div class="social-profiles">
-                      \${socials.map(s => \`
-                        <span class="social-badge">
-                          \${getSocialIcon(s.platform)} \${s.platform}
-                        </span>
-                      \`).join('')}
-                    </div>
-                  </div>
-                \` : ''}
-              </div>
-            </div>
-          \`;
-        }).join('');
-
-        container.innerHTML = '<div class="websites-grid">' + html + '</div>';
-      }
-
-      function getSocialIcon(platform) {
-        const icons = {
-          twitter: '🐦',
-          x: '𝕏',
-          facebook: '📘',
-          instagram: '📸',
-          linkedin: '💼',
-          youtube: '📹',
-          tiktok: '🎵'
-        };
-        return icons[platform.toLowerCase()] || '🔗';
-      }
-
-      async function syncFromAirtable() {
-        showSyncStatus('Syncing from Airtable...', 'loading');
-
-        try {
-          const response = await fetch(API_BASE + '/api/airtable/sync', {
-            method: 'POST'
+        // Add click handlers
+        container.querySelectorAll('.tab').forEach(tab => {
+          tab.addEventListener('click', function() {
+            selectTable(this.dataset.tableId);
           });
+        });
+      }
+
+      function getTableIcon(name) {
+        const n = name.toLowerCase();
+        if (n.includes('character')) return '👤';
+        if (n.includes('profile')) return '📋';
+        if (n.includes('brand')) return '🏷️';
+        if (n.includes('content')) return '📝';
+        if (n.includes('article')) return '📰';
+        if (n.includes('youtube') || n.includes('video')) return '📹';
+        if (n.includes('twitter') || n.includes('tweet')) return '🐦';
+        if (n.includes('instagram')) return '📸';
+        if (n.includes('image') || n.includes('prompt')) return '🖼️';
+        if (n.includes('social')) return '📱';
+        if (n.includes('template')) return '📄';
+        if (n.includes('source') || n.includes('transcript')) return '📚';
+        if (n.includes('episode')) return '🎬';
+        if (n.includes('news')) return '📰';
+        return '📊';
+      }
+
+      function selectTable(tableId) {
+        // Update active tab
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        const tab = document.querySelector('[data-table-id="' + tableId + '"]');
+        if (tab) tab.classList.add('active');
+
+        // Find table data
+        currentTable = tables.find(t => t.id === tableId);
+
+        // Load records
+        loadRecords(tableId);
+      }
+
+      async function loadRecords(tableId, noCache = false) {
+        const container = document.getElementById('content-container');
+        container.innerHTML = '<div class="loading-container"><div class="loading"></div></div>';
+
+        const maxRecords = document.getElementById('max-records').value;
+
+        try {
+          const url = API_BASE + '/api/airtable/tables/' + encodeURIComponent(tableId) +
+                      '/records?maxRecords=' + maxRecords + (noCache ? '&noCache=true' : '');
+          const response = await fetch(url);
           const data = await response.json();
 
-          if (data.success) {
-            showSyncStatus(
-              'Synced ' + (data.data?.profilesCount || 0) + ' profiles and ' + (data.data?.websitesCount || 0) + ' websites',
-              'success'
-            );
-            // Reload data
-            loadProfiles();
-            loadWebsites();
+          if (data.success && data.data) {
+            currentRecords = data.data;
+            renderTableView();
           } else {
-            showSyncStatus(data.error || 'Sync failed', 'error');
+            container.innerHTML = '<div class="no-results"><p>' + (data.error || 'Failed to load records') + '</p></div>';
           }
         } catch (error) {
-          console.error('Sync error:', error);
-          showSyncStatus('Sync failed: ' + error.message, 'error');
+          console.error('Failed to load records:', error);
+          container.innerHTML = '<div class="no-results"><p>Failed to load records</p></div>';
         }
       }
 
-      function showSyncStatus(message, type) {
-        const status = document.getElementById('sync-status');
-        status.textContent = message;
-        status.className = 'sync-status ' + type;
-        status.style.display = 'block';
+      function filterRecords(records) {
+        if (!currentSearch) return records;
+        return records.filter(r => {
+          const str = JSON.stringify(r.fields).toLowerCase();
+          return str.includes(currentSearch);
+        });
+      }
+
+      function renderTableView() {
+        const container = document.getElementById('content-container');
+        const filtered = filterRecords(currentRecords);
+
+        if (!filtered || filtered.length === 0) {
+          container.innerHTML = '<div class="no-results"><p>No records found</p></div>';
+          return;
+        }
+
+        // Get all unique field names
+        const fieldSet = new Set();
+        filtered.forEach(r => Object.keys(r.fields).forEach(k => fieldSet.add(k)));
+        const fields = Array.from(fieldSet);
+
+        // Schema info
+        const schemaHtml = currentTable && currentTable.fields ? \`
+          <details class="schema-info">
+            <summary>📋 Table Schema (\${currentTable.fields.length} fields)</summary>
+            <div class="schema-fields">
+              \${currentTable.fields.map(f => \`
+                <div class="schema-field">
+                  <span class="field-name">\${f.name}</span>
+                  <span class="field-type">\${f.type}</span>
+                </div>
+              \`).join('')}
+            </div>
+          </details>
+        \` : '';
+
+        // Table HTML
+        const tableHtml = \`
+          \${schemaHtml}
+          <div class="table-wrapper">
+            <table class="records-table">
+              <thead>
+                <tr>
+                  <th></th>
+                  \${fields.slice(0, 8).map(f => \`<th>\${f}</th>\`).join('')}
+                </tr>
+              </thead>
+              <tbody>
+                \${filtered.map(record => \`
+                  <tr>
+                    <td class="cell-actions">
+                      \${AIRTABLE_BASE_ID ? \`<a href="https://airtable.com/\${AIRTABLE_BASE_ID}/\${currentTable.id}/\${record.id}" target="_blank" class="airtable-link" title="Open in Airtable">↗</a>\` : ''}
+                    </td>
+                    \${fields.slice(0, 8).map(f => \`<td>\${formatCell(record.fields[f], f)}</td>\`).join('')}
+                  </tr>
+                \`).join('')}
+              </tbody>
+            </table>
+          </div>
+          <p style="text-align: center; color: var(--text-secondary); font-size: 0.8rem; margin-top: 1rem;">
+            Showing \${filtered.length} of \${currentRecords.length} records
+            \${fields.length > 8 ? ' • ' + (fields.length - 8) + ' columns hidden' : ''}
+          </p>
+        \`;
+
+        container.innerHTML = tableHtml;
+
+        // Add click handlers for JSON cells
+        container.querySelectorAll('.cell-json').forEach(cell => {
+          cell.addEventListener('click', function() {
+            showJsonModal(this.dataset.field, this.dataset.value);
+          });
+        });
+      }
+
+      function formatCell(value, fieldName) {
+        if (value === undefined || value === null) return '<span style="color: var(--text-secondary)">—</span>';
+
+        if (typeof value === 'boolean') {
+          return \`<span class="cell-boolean \${value ? 'bool-true' : 'bool-false'}">\${value ? '✓' : '✗'} \${value}</span>\`;
+        }
+
+        if (Array.isArray(value)) {
+          if (value.length === 0) return '<span style="color: var(--text-secondary)">[]</span>';
+          if (value.length <= 3) {
+            return \`<div class="cell-array">\${value.map(v => \`<span class="array-tag">\${truncate(String(v), 20)}</span>\`).join('')}</div>\`;
+          }
+          return \`<span class="cell-json" data-field="\${fieldName}" data-value='\${escapeHtml(JSON.stringify(value, null, 2))}'>[\${value.length} items]</span>\`;
+        }
+
+        if (typeof value === 'object') {
+          return \`<span class="cell-json" data-field="\${fieldName}" data-value='\${escapeHtml(JSON.stringify(value, null, 2))}'>{...}</span>\`;
+        }
+
+        const str = String(value);
+
+        // Check if it's JSON string
+        if (str.startsWith('{') || str.startsWith('[')) {
+          try {
+            const parsed = JSON.parse(str);
+            return \`<span class="cell-json" data-field="\${fieldName}" data-value='\${escapeHtml(JSON.stringify(parsed, null, 2))}'>{JSON}</span>\`;
+          } catch (e) {}
+        }
+
+        // Check if it's a URL
+        if (str.startsWith('http')) {
+          return \`<a href="\${str}" target="_blank" class="cell-link">\${truncate(str, 40)}</a>\`;
+        }
+
+        return truncate(str, 50);
+      }
+
+      function truncate(str, len) {
+        if (str.length <= len) return escapeHtml(str);
+        return escapeHtml(str.substring(0, len)) + '...';
+      }
+
+      function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+      }
+
+      function showJsonModal(field, value) {
+        const modal = document.createElement('div');
+        modal.className = 'json-modal';
+        modal.innerHTML = \`
+          <div class="json-modal-content">
+            <div class="json-modal-header">
+              <h3>\${field}</h3>
+              <button class="json-modal-close">&times;</button>
+            </div>
+            <div class="json-modal-body">
+              <pre>\${value}</pre>
+            </div>
+          </div>
+        \`;
+
+        document.body.appendChild(modal);
+
+        modal.addEventListener('click', function(e) {
+          if (e.target === modal || e.target.classList.contains('json-modal-close')) {
+            modal.remove();
+          }
+        });
+      }
+
+      function showError(message) {
+        document.getElementById('content-container').innerHTML =
+          '<div class="no-results"><p>' + message + '</p></div>';
+      }
+
+      function showToast(message, type) {
+        const toast = document.getElementById('status-toast');
+        toast.textContent = message;
+        toast.className = 'status-toast ' + type;
+        toast.style.display = 'block';
 
         if (type !== 'loading') {
-          setTimeout(() => {
-            status.style.display = 'none';
-          }, 4000);
+          setTimeout(() => { toast.style.display = 'none'; }, 4000);
         }
       }
 
@@ -726,17 +799,11 @@ export function profilesPage({ profilesCount, websitesCount, apiBase, configured
           timeout = setTimeout(() => func.apply(this, args), wait);
         };
       }
-
-      // Initial load
-      if (CONFIGURED) {
-        loadProfiles();
-        loadWebsites();
-      }
     </script>
   `;
 
   return baseLayout({
-    title: 'Profiles - Universal Text Processor',
+    title: 'Airtable Data - Universal Text Processor',
     content,
     styles,
     scripts
