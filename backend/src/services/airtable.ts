@@ -126,46 +126,52 @@ export class AirtableService {
 
   /**
    * Parse Airtable record to UserProfile
+   * Supports both standard fields and Brand Profiles table structure
    */
   private parseUserProfile(record: any): AirtableUserProfile {
     const fields = record.fields || record;
 
     return {
       id: record.id,
-      userId: fields.userId || fields.user_id || '',
-      name: fields.name || fields.Name || '',
-      displayName: fields.displayName || fields.display_name || fields.DisplayName,
+      // Support both standard and Brand Profiles structure
+      userId: fields.userId || fields.user_id || fields['Brand Name'] || '',
+      name: fields.name || fields.Name || fields['Brand Name'] || '',
+      displayName: fields.displayName || fields.display_name || fields.DisplayName || fields['Brand Name'],
       email: fields.email || fields.Email,
       accounts: Array.isArray(fields.accounts) ? fields.accounts :
                 typeof fields.accounts === 'string' ? fields.accounts.split(',').map((s: string) => s.trim()) :
                 Array.isArray(fields.Accounts) ? fields.Accounts : [],
-      writingProfile: this.parseJSON(fields.writingProfile || fields.WritingProfile),
-      brandingColors: this.parseJSON(fields.brandingColors || fields.BrandingColors),
+      writingProfile: this.parseJSON(fields.writingProfile || fields.WritingProfile || fields['Writing Profile']),
+      brandingColors: this.parseJSON(fields.brandingColors || fields.BrandingColors || fields['Graphics Profile']),
       logoUrl: fields.logoUrl || fields.logo_url || fields.LogoUrl,
       defaultLanguage: fields.defaultLanguage || fields.default_language || fields.DefaultLanguage || 'english',
-      enabled: fields.enabled !== false && fields.Enabled !== false,
-      createdAt: fields.createdAt || fields.created_at || fields.Created,
-      updatedAt: fields.updatedAt || fields.updated_at || fields.Modified
+      // Support checkbox field 'Active' from Brand Profiles
+      enabled: fields.Active === true || (fields.enabled !== false && fields.Enabled !== false),
+      createdAt: fields.createdAt || fields.created_at || fields.Created || fields['Created At'],
+      updatedAt: fields.updatedAt || fields.updated_at || fields.Modified || fields['Updated At']
     };
   }
 
   /**
-   * Parse Airtable record to Website
+   * Parse Airtable record to Website (or Content Generation)
+   * Supports both standard Website fields and Content Generations table structure
    */
   private parseWebsite(record: any): AirtableWebsite {
     const fields = record.fields || record;
 
     return {
       id: record.id,
-      websiteId: fields.websiteId || fields.website_id || fields.WebsiteId || '',
-      name: fields.name || fields.Name || '',
-      domain: fields.domain || fields.Domain || '',
+      // Support both standard and Content Generations structure
+      websiteId: fields.websiteId || fields.website_id || fields.WebsiteId || fields.main_hook || record.id || '',
+      name: fields.name || fields.Name || fields.main_hook || '',
+      domain: fields.domain || fields.Domain || fields.Status || '',
       userId: fields.userId || fields.user_id || fields.UserId || '',
-      userProfileId: fields.userProfileId || fields.user_profile_id || fields.UserProfileId,
+      userProfileId: fields.userProfileId || fields.user_profile_id || fields.UserProfileId || fields['Brand Profile'],
       socialProfiles: this.parseJSON(fields.socialProfiles || fields.SocialProfiles) || [],
       schedulingWebhook: fields.schedulingWebhook || fields.scheduling_webhook || fields.SchedulingWebhook,
-      enabled: fields.enabled !== false && fields.Enabled !== false,
-      createdAt: fields.createdAt || fields.created_at || fields.Created,
+      // Support Status field from Content Generations
+      enabled: fields.Status === 'Processed' || (fields.enabled !== false && fields.Enabled !== false),
+      createdAt: fields.createdAt || fields.created_at || fields.Created || fields['Generated At'],
       updatedAt: fields.updatedAt || fields.updated_at || fields.Modified
     };
   }
@@ -202,7 +208,8 @@ export class AirtableService {
     try {
       console.log('[Airtable] Fetching user profiles from Airtable');
       const tableName = encodeURIComponent(this.config.tables.profiles);
-      const result = await this.airtableFetch(`${tableName}?filterByFormula=NOT({enabled}=FALSE())`);
+      // Fetch all records - filtering done in parseUserProfile based on Active/enabled field
+      const result = await this.airtableFetch(`${tableName}`);
 
       const profiles = (result.records || []).map((r: any) => this.parseUserProfile(r));
       await this.setCache(cacheKey, profiles);
@@ -360,7 +367,8 @@ export class AirtableService {
     try {
       console.log('[Airtable] Fetching websites from Airtable');
       const tableName = encodeURIComponent(this.config.tables.websites);
-      const result = await this.airtableFetch(`${tableName}?filterByFormula=NOT({enabled}=FALSE())`);
+      // Fetch all records - filtering done in parseWebsite based on Status/enabled field
+      const result = await this.airtableFetch(`${tableName}`);
 
       const websites = (result.records || []).map((r: any) => this.parseWebsite(r));
       await this.setCache(cacheKey, websites);
