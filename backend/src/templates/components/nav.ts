@@ -11,6 +11,8 @@ export interface NavProps {
 export function nav({ currentPage, apiBase }: NavProps): string {
   const links = [
     { path: '/dashboard', label: 'Overview', icon: '📊' },
+    { path: '/dashboard/add', label: 'Add Content', icon: '➕' },
+    { path: '/dashboard/generate-image', label: 'Generate', icon: '🎨' },
     { path: '/dashboard/memories', label: 'Memories', icon: '💾' },
     { path: '/dashboard/tweets', label: 'Tweets', icon: '🐦' },
     { path: '/dashboard/videos', label: 'Videos', icon: '📹' },

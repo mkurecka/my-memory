@@ -8,6 +8,8 @@ import { aiContentPage } from '../templates/pages/ai-content';
 import { aiImagesPage } from '../templates/pages/ai-images';
 import { webhooksPage } from '../templates/pages/webhooks';
 import { profilesPage } from '../templates/pages/profiles';
+import { addContentPage } from '../templates/pages/add-content';
+import { generateImagePage } from '../templates/pages/generate-image';
 import { AirtableService } from '../services/airtable';
 
 const router = new Hono<{ Bindings: Env }>();
@@ -168,6 +170,37 @@ router.get('/webhooks', async (c) => {
   } catch (error: any) {
     console.error('Webhooks page error:', error);
     return c.html(errorPage('Webhooks Error', error.message), 500);
+  }
+});
+
+// Default user ID for dashboard forms (can be customized per user in future)
+const DEFAULT_USER_ID = 'dashboard_user';
+
+/**
+ * GET /dashboard/add
+ * Add content form page (memory, tweet, YouTube)
+ */
+router.get('/add', async (c) => {
+  try {
+    const html = addContentPage({ apiBase, userId: DEFAULT_USER_ID });
+    return c.html(html);
+  } catch (error: any) {
+    console.error('Add Content page error:', error);
+    return c.html(errorPage('Add Content Error', error.message), 500);
+  }
+});
+
+/**
+ * GET /dashboard/generate-image
+ * Generate AI image form page
+ */
+router.get('/generate-image', async (c) => {
+  try {
+    const html = generateImagePage({ apiBase, userId: DEFAULT_USER_ID });
+    return c.html(html);
+  } catch (error: any) {
+    console.error('Generate Image page error:', error);
+    return c.html(errorPage('Generate Image Error', error.message), 500);
   }
 });
 
