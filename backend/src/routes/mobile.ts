@@ -217,18 +217,27 @@ router.post('/save-youtube', async (c) => {
  * Universal save endpoint - auto-detects content type from URL
  *
  * Detects:
- * - x.com, twitter.com → saves as tweet, fetches tweet data
+ * - x.com, twitter.com → saves as tweet (with optional text from share sheet)
  * - youtube.com, youtu.be → saves as video, fetches video data
  * - anything else → saves as memory/text
+ *
+ * Body options:
+ * - Plain text: Just the URL or text
+ * - JSON: { text: "url or text", content?: "optional tweet/video content" }
+ *
+ * iOS Shortcut tip: Use "Get Text from Input" to capture shared text,
+ * then send both URL and content for tweets.
  */
 router.post('/save', async (c) => {
   try {
     let input: string;
+    let additionalContent: string | undefined;
     const contentType = c.req.header('Content-Type') || '';
 
     if (contentType.includes('application/json')) {
       const body = await c.req.json();
       input = body.text || body.url || body.input || '';
+      additionalContent = body.content || body.tweetText || body.description;
     } else {
       input = await c.req.text();
     }
@@ -247,7 +256,7 @@ router.post('/save', async (c) => {
 
     // Twitter/X detection
     if (lowerInput.includes('x.com/') || lowerInput.includes('twitter.com/')) {
-      return await saveTweetFromUrl(c, userId, input);
+      return await saveTweetFromUrl(c, userId, input, additionalContent);
     }
 
     // YouTube detection
@@ -268,9 +277,81 @@ router.post('/save', async (c) => {
 });
 
 /**
- * Save tweet from URL - extracts tweet ID and fetches data if possible
+ * Fetch tweet data using FxTwitter API (free, no auth required)
  */
-async function saveTweetFromUrl(c: any, userId: string, url: string) {
+async function fetchTweetData(tweetId: string, username: string): Promise<{
+  text: string;
+  author: { name: string; username: string; avatar?: string };
+  media?: { images?: string[]; videos?: string[] };
+  stats?: { likes: number; retweets: number; replies: number };
+  createdAt?: string;
+} | null> {
+  try {
+    // FxTwitter API - free and reliable
+    const apiUrl = `https://api.fxtwitter.com/${username}/status/${tweetId}`;
+    const response = await fetch(apiUrl, {
+      headers: { 'User-Agent': 'UniversalTextProcessor/1.0' }
+    });
+
+    if (!response.ok) {
+      console.log('[Mobile] FxTwitter API failed:', response.status);
+      return null;
+    }
+
+    const data = await response.json() as any;
+
+    if (data.code !== 200 || !data.tweet) {
+      console.log('[Mobile] FxTwitter returned no tweet data');
+      return null;
+    }
+
+    const tweet = data.tweet;
+
+    // Extract media
+    const images: string[] = [];
+    const videos: string[] = [];
+
+    if (tweet.media?.photos) {
+      for (const photo of tweet.media.photos) {
+        if (photo.url) images.push(photo.url);
+      }
+    }
+
+    if (tweet.media?.videos) {
+      for (const video of tweet.media.videos) {
+        if (video.url) videos.push(video.url);
+      }
+    }
+
+    return {
+      text: tweet.text || '',
+      author: {
+        name: tweet.author?.name || username,
+        username: tweet.author?.screen_name || username,
+        avatar: tweet.author?.avatar_url
+      },
+      media: {
+        images: images.length > 0 ? images : undefined,
+        videos: videos.length > 0 ? videos : undefined
+      },
+      stats: {
+        likes: tweet.likes || 0,
+        retweets: tweet.retweets || 0,
+        replies: tweet.replies || 0
+      },
+      createdAt: tweet.created_at
+    };
+  } catch (error) {
+    console.log('[Mobile] Error fetching tweet:', error);
+    return null;
+  }
+}
+
+/**
+ * Save tweet from URL - extracts tweet ID and fetches data via FxTwitter
+ * Falls back to provided content if API fetch fails
+ */
+async function saveTweetFromUrl(c: any, userId: string, url: string, providedContent?: string) {
   // Extract tweet ID
   const tweetIdMatch = url.match(/status\/(\d+)/);
   const tweetId = tweetIdMatch ? tweetIdMatch[1] : null;
@@ -279,11 +360,42 @@ async function saveTweetFromUrl(c: any, userId: string, url: string) {
   const usernameMatch = url.match(/(?:x\.com|twitter\.com)\/([^\/\?]+)/);
   const username = usernameMatch ? usernameMatch[1] : null;
 
+  // Try to fetch tweet data
+  let tweetText = providedContent || url; // Use provided content as fallback
+  let authorName = username || 'Unknown';
+  let authorUsername = username || '';
+  let authorAvatar: string | undefined;
+  let media: { images?: string[]; videos?: string[] } = {};
+  let stats: { likes: number; retweets: number; replies: number } | undefined;
+  let tweetCreatedAt: string | undefined;
+  let fetchedFromApi = false;
+
+  if (tweetId && username) {
+    const tweetData = await fetchTweetData(tweetId, username);
+    if (tweetData) {
+      tweetText = tweetData.text;
+      authorName = tweetData.author.name;
+      authorUsername = tweetData.author.username;
+      authorAvatar = tweetData.author.avatar;
+      media = tweetData.media || {};
+      stats = tweetData.stats;
+      tweetCreatedAt = tweetData.createdAt;
+      fetchedFromApi = true;
+    }
+  }
+
   const postId = generateId('post');
   const contextJson = JSON.stringify({
     tweetId,
-    author: username || 'Unknown',
     url,
+    author: {
+      displayName: authorName,
+      username: authorUsername,
+      avatar: authorAvatar
+    },
+    media,
+    stats,
+    tweetCreatedAt,
     savedFrom: 'ios_shortcut',
     savedAt: new Date().toISOString()
   });
@@ -295,19 +407,25 @@ async function saveTweetFromUrl(c: any, userId: string, url: string) {
     postId,
     userId,
     'tweet',
-    url,
+    tweetText,
     contextJson,
     'saved',
     Date.now()
   ).run();
 
+  const hasContent = tweetText !== url;
+
   return c.json({
     success: true,
-    message: '🐦 Tweet saved!',
+    message: hasContent ? '🐦 Tweet saved with content!' : '🐦 Tweet URL saved!',
     type: 'tweet',
     id: postId,
     tweetId,
-    username
+    author: authorName,
+    text: tweetText.substring(0, 100) + (tweetText.length > 100 ? '...' : ''),
+    hasMedia: (media.images?.length || 0) + (media.videos?.length || 0) > 0,
+    fetchedFromApi,
+    tip: !hasContent ? 'Tip: Include tweet text with "content" field for full capture' : undefined
   });
 }
 
