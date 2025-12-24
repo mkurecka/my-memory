@@ -28,30 +28,15 @@ export interface DashboardProps {
 }
 
 export function dashboardPage({ stats, apiBase }: DashboardProps): string {
+  const totalMemories = stats.posts.memory + stats.posts.tweets + stats.posts.videos;
   const navigationCards = [
     {
-      title: 'Memories',
-      description: 'Saved text snippets and notes from anywhere',
-      icon: '💾',
-      count: stats.posts.memory,
+      title: 'All Memories',
+      description: 'Saved content: text snippets, tweets, and videos',
+      icon: '🧠',
+      count: totalMemories,
       link: '/dashboard/memories',
       color: '#8b5cf6'
-    },
-    {
-      title: 'Tweets',
-      description: 'Tweets saved from X/Twitter',
-      icon: '🐦',
-      count: stats.posts.tweets,
-      link: '/dashboard/tweets',
-      color: '#1da1f2'
-    },
-    {
-      title: 'Videos',
-      description: 'YouTube videos and video content',
-      icon: '📹',
-      count: stats.posts.videos,
-      link: '/dashboard/videos',
-      color: '#ff0000'
     },
     {
       title: 'AI Content',
@@ -323,7 +308,7 @@ export function dashboardPage({ stats, apiBase }: DashboardProps): string {
   `;
 
   return baseLayout({
-    title: 'Dashboard - Universal Text Processor',
+    title: 'Dashboard - My Memory 🧠',
     content,
     styles,
     scripts

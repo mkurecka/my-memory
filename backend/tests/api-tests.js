@@ -4,7 +4,7 @@
 const https = require('https');
 const http = require('http');
 
-const API_BASE_URL = 'https://text-processor-api.kureckamichal.workers.dev';
+const API_BASE_URL = 'https://my-memory.kureckamichal.workers.dev';
 
 class APITests {
   constructor() {
@@ -113,7 +113,7 @@ tests.test('GET / returns API info', async () => {
   const res = await tests.fetch('/');
   tests.assertEqual(res.status, 200, 'Should return 200 OK');
   tests.assert(res.data.success, 'Response should have success: true');
-  tests.assertContains(res.data.message, 'Universal Text Processor');
+  tests.assertContains(res.data.message, 'My Memory');
 });
 
 tests.test('GET /health returns healthy status', async () => {

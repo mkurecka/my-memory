@@ -303,7 +303,7 @@ export function aiContentPage({ count, apiBase }: AIContentPageProps): string {
 
         try {
           const offset = (currentPage - 1) * perPage;
-          let url = API_BASE + '/api/search/recent?table=posts&limit=100';
+          let url = API_BASE + '/api/search/recent?table=posts&hasGenerated=true&limit=' + perPage + '&offset=' + offset;
 
           if (currentSearch) {
             url += '&q=' + encodeURIComponent(currentSearch);
@@ -313,27 +313,20 @@ export function aiContentPage({ count, apiBase }: AIContentPageProps): string {
           const data = await response.json();
 
           if (data.success && data.results) {
-            // Filter only items with generated_output
-            let content = data.results.filter(item => item.generated_output);
+            let content = data.results;
 
             // Filter by mode if selected
             if (currentMode) {
               content = content.filter(item => item.mode === currentMode);
             }
 
-            // Sort
+            // Sort (if oldest, we need to reverse since backend returns newest first)
             if (currentSort === 'oldest') {
-              content = content.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-            } else {
-              content = content.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+              content = content.reverse();
             }
 
-            // Paginate
-            const total = content.length;
-            const paginated = content.slice(offset, offset + perPage);
-
-            if (paginated.length > 0) {
-              const html = paginated.map((item, index) => {
+            if (content.length > 0) {
+              const html = content.map((item, index) => {
                 const date = new Date(item.created_at);
                 const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
                 const mode = item.mode || item.type || 'processed';
@@ -372,7 +365,7 @@ export function aiContentPage({ count, apiBase }: AIContentPageProps): string {
               }).join('');
 
               container.innerHTML = '<div class="content-grid">' + html + '</div>';
-              updatePagination(total);
+              updatePagination(${count});
             } else {
               container.innerHTML = '<div class="no-results"><p>No AI-generated content found</p></div>';
               document.getElementById('pagination').innerHTML = '';
@@ -484,7 +477,7 @@ export function aiContentPage({ count, apiBase }: AIContentPageProps): string {
   `;
 
   return baseLayout({
-    title: 'AI Content - Universal Text Processor',
+    title: 'AI Content - My Memory 🧠',
     content,
     styles,
     scripts

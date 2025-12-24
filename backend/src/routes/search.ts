@@ -178,6 +178,7 @@ search.get('/recent', async (c) => {
     const offset = parseInt(c.req.query('offset') || '0');
     const type = c.req.query('type'); // Optional filter for posts type
     const event = c.req.query('event'); // Optional filter for webhook event type
+    const hasGenerated = c.req.query('hasGenerated') === 'true'; // Filter for AI content
 
     let sql: string;
     let bindings: any[];
@@ -196,31 +197,27 @@ search.get('/recent', async (c) => {
         bindings = [limit, offset];
       }
     } else if (table === 'posts') {
-      if (type) {
-        if (userId) {
-          sql = `SELECT id, type, original_text, generated_output, created_at, context_json
-                 FROM posts WHERE user_id = ? AND type = ?
-                 ORDER BY created_at DESC LIMIT ?`;
-          bindings = [userId, type, limit];
-        } else {
-          sql = `SELECT id, type, original_text, generated_output, created_at, context_json
-                 FROM posts WHERE type = ?
-                 ORDER BY created_at DESC LIMIT ?`;
-          bindings = [type, limit];
-        }
-      } else {
-        if (userId) {
-          sql = `SELECT id, type, original_text, generated_output, created_at, context_json
-                 FROM posts WHERE user_id = ?
-                 ORDER BY created_at DESC LIMIT ?`;
-          bindings = [userId, limit];
-        } else {
-          sql = `SELECT id, type, original_text, generated_output, created_at, context_json
-                 FROM posts
-                 ORDER BY created_at DESC LIMIT ?`;
-          bindings = [limit];
-        }
+      // Build WHERE conditions
+      const conditions: string[] = [];
+      bindings = [];
+
+      if (userId) {
+        conditions.push('user_id = ?');
+        bindings.push(userId);
       }
+      if (type) {
+        conditions.push('type = ?');
+        bindings.push(type);
+      }
+      if (hasGenerated) {
+        conditions.push("generated_output IS NOT NULL AND generated_output != ''");
+      }
+
+      const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+      sql = `SELECT id, type, original_text, generated_output, created_at, context_json
+             FROM posts ${whereClause}
+             ORDER BY created_at DESC LIMIT ? OFFSET ?`;
+      bindings.push(limit, offset);
     } else {
       if (userId) {
         sql = `SELECT id, text, context_json, tags, created_at
@@ -322,6 +319,58 @@ search.delete('/webhook/:id', async (c) => {
     return c.json({ success: true, message: 'Webhook event deleted' });
   } catch (error: any) {
     console.error('Delete webhook error:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+/**
+ * PATCH /api/search/post/:id/transcript
+ * Save fetched transcript to post's context_json
+ */
+search.patch('/post/:id/transcript', async (c) => {
+  try {
+    const id = c.req.param('id');
+    const { transcript } = await c.req.json();
+
+    if (!transcript) {
+      return c.json({ success: false, error: 'Transcript data required' }, 400);
+    }
+
+    // Get current post
+    const post = await c.env.DB
+      .prepare('SELECT context_json FROM posts WHERE id = ?')
+      .bind(id)
+      .first<{ context_json: string }>();
+
+    if (!post) {
+      return c.json({ success: false, error: 'Post not found' }, 404);
+    }
+
+    // Parse existing context and merge with transcript
+    let context: any = {};
+    try {
+      context = post.context_json ? JSON.parse(post.context_json) : {};
+    } catch {
+      context = {};
+    }
+
+    context.transcript = transcript;
+
+    // Update the post
+    await c.env.DB
+      .prepare('UPDATE posts SET context_json = ?, updated_at = ? WHERE id = ?')
+      .bind(JSON.stringify(context), Date.now(), id)
+      .run();
+
+    console.log('[Search] Saved transcript to post:', id);
+
+    return c.json({
+      success: true,
+      message: 'Transcript saved',
+      wordCount: transcript.wordCount || 0
+    });
+  } catch (error: any) {
+    console.error('Save transcript error:', error);
     return c.json({ success: false, error: error.message }, 500);
   }
 });

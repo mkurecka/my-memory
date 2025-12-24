@@ -1,21 +1,17 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { dashboardPage } from '../templates/pages/dashboard';
-import { memoriesPage } from '../templates/pages/memories';
-import { tweetsPage } from '../templates/pages/tweets';
-import { videosPage } from '../templates/pages/videos';
+import { unifiedMemoriesPage } from '../templates/pages/memories-unified';
 import { aiContentPage } from '../templates/pages/ai-content';
 import { aiImagesPage } from '../templates/pages/ai-images';
 import { webhooksPage } from '../templates/pages/webhooks';
 import { profilesPage } from '../templates/pages/profiles';
 import { addContentPage } from '../templates/pages/add-content';
 import { generateImagePage } from '../templates/pages/generate-image';
+import { claudeSessionsPage } from '../templates/pages/claude-sessions';
 import { AirtableService } from '../services/airtable';
 
 const router = new Hono<{ Bindings: Env }>();
-
-// Use actual Worker URL for API calls
-const apiBase = 'https://text-processor-api.kureckamichal.workers.dev';
 
 /**
  * GET /dashboard
@@ -23,6 +19,8 @@ const apiBase = 'https://text-processor-api.kureckamichal.workers.dev';
  */
 router.get('/', async (c) => {
   try {
+    const apiBase = c.env.APP_URL;
+    
     const [postsCount, memoryCount, webhooksCount, usersCount, tweetsCount, videosCount] = await Promise.all([
       c.env.DB.prepare('SELECT COUNT(*) as count FROM posts').first<any>(),
       c.env.DB.prepare('SELECT COUNT(*) as count FROM memory').first<any>(),
@@ -58,14 +56,26 @@ router.get('/', async (c) => {
 
 /**
  * GET /dashboard/memories
- * Memories listing page
+ * Unified memories page - all saved items (memories, tweets, videos)
  */
 router.get('/memories', async (c) => {
   try {
-    const result = await c.env.DB.prepare('SELECT COUNT(*) as count FROM memory').first<any>();
-    const count = result?.count || 0;
+    const apiBase = c.env.APP_URL;
 
-    const html = memoriesPage({ count, apiBase });
+    const [memoryCount, tweetsCount, videosCount] = await Promise.all([
+      c.env.DB.prepare('SELECT COUNT(*) as count FROM memory').first<any>(),
+      c.env.DB.prepare('SELECT COUNT(*) as count FROM posts WHERE type = ?').bind('tweet').first<any>(),
+      c.env.DB.prepare('SELECT COUNT(*) as count FROM posts WHERE type = ?').bind('youtube_video').first<any>(),
+    ]);
+
+    const counts = {
+      memories: memoryCount?.count || 0,
+      tweets: tweetsCount?.count || 0,
+      videos: videosCount?.count || 0,
+      total: (memoryCount?.count || 0) + (tweetsCount?.count || 0) + (videosCount?.count || 0),
+    };
+
+    const html = unifiedMemoriesPage({ counts, apiBase });
     return c.html(html);
 
   } catch (error: any) {
@@ -75,51 +85,12 @@ router.get('/memories', async (c) => {
 });
 
 /**
- * GET /dashboard/tweets
- * Tweets listing page
- */
-router.get('/tweets', async (c) => {
-  try {
-    const result = await c.env.DB.prepare(
-      'SELECT COUNT(*) as count FROM posts WHERE type = ?'
-    ).bind('tweet').first<any>();
-    const count = result?.count || 0;
-
-    const html = tweetsPage({ count, apiBase });
-    return c.html(html);
-
-  } catch (error: any) {
-    console.error('Tweets page error:', error);
-    return c.html(errorPage('Tweets Error', error.message), 500);
-  }
-});
-
-/**
- * GET /dashboard/videos
- * Videos listing page
- */
-router.get('/videos', async (c) => {
-  try {
-    const result = await c.env.DB.prepare(
-      'SELECT COUNT(*) as count FROM posts WHERE type = ?'
-    ).bind('youtube_video').first<any>();
-    const count = result?.count || 0;
-
-    const html = videosPage({ count, apiBase });
-    return c.html(html);
-
-  } catch (error: any) {
-    console.error('Videos page error:', error);
-    return c.html(errorPage('Videos Error', error.message), 500);
-  }
-});
-
-/**
  * GET /dashboard/ai-content
  * AI-generated content listing page
  */
 router.get('/ai-content', async (c) => {
   try {
+    const apiBase = c.env.APP_URL;
     const result = await c.env.DB.prepare(
       'SELECT COUNT(*) as count FROM posts WHERE generated_output IS NOT NULL AND generated_output != ?'
     ).bind('').first<any>();
@@ -140,6 +111,7 @@ router.get('/ai-content', async (c) => {
  */
 router.get('/ai-images', async (c) => {
   try {
+    const apiBase = c.env.APP_URL;
     // Get count of images from R2
     const listed = await c.env.STORAGE.list({ prefix: 'ai-images/', limit: 1000 });
     const count = listed.objects.length;
@@ -159,6 +131,7 @@ router.get('/ai-images', async (c) => {
  */
 router.get('/webhooks', async (c) => {
   try {
+    const apiBase = c.env.APP_URL;
     const result = await c.env.DB.prepare(
       'SELECT COUNT(*) as count FROM webhook_events'
     ).first<any>();
@@ -176,12 +149,14 @@ router.get('/webhooks', async (c) => {
 // Default user ID for dashboard forms (can be customized per user in future)
 const DEFAULT_USER_ID = 'dashboard_user';
 
+
 /**
  * GET /dashboard/add
  * Add content form page (memory, tweet, YouTube)
  */
 router.get('/add', async (c) => {
   try {
+    const apiBase = c.env.APP_URL;
     const html = addContentPage({ apiBase, userId: DEFAULT_USER_ID });
     return c.html(html);
   } catch (error: any) {
@@ -196,6 +171,7 @@ router.get('/add', async (c) => {
  */
 router.get('/generate-image', async (c) => {
   try {
+    const apiBase = c.env.APP_URL;
     const html = generateImagePage({ apiBase, userId: DEFAULT_USER_ID });
     return c.html(html);
   } catch (error: any) {
@@ -205,11 +181,31 @@ router.get('/generate-image', async (c) => {
 });
 
 /**
+ * GET /dashboard/claude-sessions
+ * Claude Code sessions page
+ */
+router.get('/claude-sessions', async (c) => {
+  try {
+    const apiBase = c.env.APP_URL;
+    const result = await c.env.DB.prepare('SELECT COUNT(*) as count FROM claude_sessions').first<any>();
+    const count = result?.count || 0;
+
+    const html = claudeSessionsPage({ count, apiBase });
+    return c.html(html);
+
+  } catch (error: any) {
+    console.error('Claude Sessions page error:', error);
+    return c.html(errorPage('Claude Sessions Error', error.message), 500);
+  }
+});
+
+/**
  * GET /dashboard/profiles
  * Airtable profiles and websites page
  */
 router.get('/profiles', async (c) => {
   try {
+    const apiBase = c.env.APP_URL;
     const airtable = new AirtableService(c.env);
     const configured = airtable.isConfigured();
     const airtableBaseId = c.env.AIRTABLE_BASE_ID || '';

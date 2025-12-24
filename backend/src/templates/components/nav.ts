@@ -13,11 +13,10 @@ export function nav({ currentPage, apiBase }: NavProps): string {
     { path: '/dashboard', label: 'Overview', icon: '📊' },
     { path: '/dashboard/add', label: 'Add Content', icon: '➕' },
     { path: '/dashboard/generate-image', label: 'Generate', icon: '🎨' },
-    { path: '/dashboard/memories', label: 'Memories', icon: '💾' },
-    { path: '/dashboard/tweets', label: 'Tweets', icon: '🐦' },
-    { path: '/dashboard/videos', label: 'Videos', icon: '📹' },
+    { path: '/dashboard/memories', label: 'Memories', icon: '🧠' },
     { path: '/dashboard/ai-content', label: 'AI Content', icon: '✨' },
     { path: '/dashboard/ai-images', label: 'AI Images', icon: '🖼️' },
+    { path: '/dashboard/claude-sessions', label: 'Claude', icon: '🤖' },
     { path: '/dashboard/webhooks', label: 'Webhooks', icon: '📡' },
     { path: '/dashboard/profiles', label: 'Airtable', icon: '📊' },
   ];
@@ -25,7 +24,7 @@ export function nav({ currentPage, apiBase }: NavProps): string {
   return `
     <nav class="dashboard-nav">
       <div class="nav-brand">
-        <a href="/dashboard">📝 Text Processor</a>
+        <a href="/dashboard">🧠 My Memory</a>
       </div>
       <div class="nav-links">
         ${links.map(link => `
