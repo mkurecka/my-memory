@@ -6,6 +6,7 @@ import { baseLayout } from '../layouts/base';
 import { nav } from '../components/nav';
 import { pageHeader } from '../components/page-header';
 import { emptyState } from '../components/empty-state';
+import { skeletonGrid, skeletonStyles } from '../components/skeleton';
 
 export interface AIContentPageProps {
   count: number;
@@ -55,7 +56,7 @@ export function aiContentPage({ count, apiBase }: AIContentPageProps): string {
           icon: '✨',
           actionText: 'Learn More',
           actionUrl: '/setup'
-        }) : '<div class="loading-container"><div class="loading"></div></div>'}
+        }) : skeletonGrid(4)}
       </div>
 
       <!-- Pagination -->
@@ -65,6 +66,8 @@ export function aiContentPage({ count, apiBase }: AIContentPageProps): string {
 
   const styles = `
     <style>
+      ${skeletonStyles}
+
       .toolbar {
         display: flex;
         gap: 1rem;
@@ -299,7 +302,7 @@ export function aiContentPage({ count, apiBase }: AIContentPageProps): string {
 
       async function loadContent() {
         const container = document.getElementById('content-container');
-        container.innerHTML = '<div class="loading-container"><div class="loading"></div></div>';
+        container.innerHTML = \`${skeletonGrid(4)}\`;
 
         try {
           const offset = (currentPage - 1) * perPage;

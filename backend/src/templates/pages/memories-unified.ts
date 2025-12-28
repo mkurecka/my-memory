@@ -7,6 +7,7 @@ import { baseLayout } from '../layouts/base';
 import { nav } from '../components/nav';
 import { pageHeader } from '../components/page-header';
 import { emptyState } from '../components/empty-state';
+import { skeletonGrid, skeletonStyles } from '../components/skeleton';
 
 export interface UnifiedMemoriesPageProps {
   counts: {
@@ -69,7 +70,7 @@ export function unifiedMemoriesPage({ counts, apiBase }: UnifiedMemoriesPageProp
           icon: '🧠',
           actionText: 'Add Content',
           actionUrl: '/dashboard/add'
-        }) : '<div class="loading-container"><div class="loading"></div></div>'}
+        }) : skeletonGrid(5)}
       </div>
 
       <!-- Pagination -->
@@ -90,6 +91,8 @@ export function unifiedMemoriesPage({ counts, apiBase }: UnifiedMemoriesPageProp
 
   const styles = `
     <style>
+      ${skeletonStyles}
+
       /* Type Filter */
       .type-filter {
         display: flex;
@@ -677,7 +680,7 @@ export function unifiedMemoriesPage({ counts, apiBase }: UnifiedMemoriesPageProp
 
       async function loadItems() {
         const container = document.getElementById('items-container');
-        container.innerHTML = '<div class="loading-container"><div class="loading"></div></div>';
+        container.innerHTML = \`${skeletonGrid(5)}\`;
 
         try {
           const offset = (currentPage - 1) * perPage;

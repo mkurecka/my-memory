@@ -4,11 +4,10 @@ import { dashboardPage } from '../templates/pages/dashboard';
 import { unifiedMemoriesPage } from '../templates/pages/memories-unified';
 import { aiContentPage } from '../templates/pages/ai-content';
 import { aiImagesPage } from '../templates/pages/ai-images';
-import { webhooksPage } from '../templates/pages/webhooks';
-import { profilesPage } from '../templates/pages/profiles';
 import { addContentPage } from '../templates/pages/add-content';
-import { generateImagePage } from '../templates/pages/generate-image';
+import { generateCarouselPage } from '../templates/pages/generate-carousel';
 import { claudeSessionsPage } from '../templates/pages/claude-sessions';
+import { settingsPage } from '../templates/pages/settings';
 import { AirtableService } from '../services/airtable';
 
 const router = new Hono<{ Bindings: Env }>();
@@ -107,7 +106,7 @@ router.get('/ai-content', async (c) => {
 
 /**
  * GET /dashboard/ai-images
- * AI-generated images gallery page
+ * Unified AI Images page - generate new images and view gallery
  */
 router.get('/ai-images', async (c) => {
   try {
@@ -116,33 +115,12 @@ router.get('/ai-images', async (c) => {
     const listed = await c.env.STORAGE.list({ prefix: 'ai-images/', limit: 1000 });
     const count = listed.objects.length;
 
-    const html = aiImagesPage({ count, apiBase });
+    const html = aiImagesPage({ count, apiBase, userId: DEFAULT_USER_ID });
     return c.html(html);
 
   } catch (error: any) {
     console.error('AI Images page error:', error);
     return c.html(errorPage('AI Images Error', error.message), 500);
-  }
-});
-
-/**
- * GET /dashboard/webhooks
- * Webhook events history page
- */
-router.get('/webhooks', async (c) => {
-  try {
-    const apiBase = c.env.APP_URL;
-    const result = await c.env.DB.prepare(
-      'SELECT COUNT(*) as count FROM webhook_events'
-    ).first<any>();
-    const count = result?.count || 0;
-
-    const html = webhooksPage({ count, apiBase });
-    return c.html(html);
-
-  } catch (error: any) {
-    console.error('Webhooks page error:', error);
-    return c.html(errorPage('Webhooks Error', error.message), 500);
   }
 });
 
@@ -166,17 +144,17 @@ router.get('/add', async (c) => {
 });
 
 /**
- * GET /dashboard/generate-image
- * Generate AI image form page
+ * GET /dashboard/generate-carousel
+ * Generate Instagram carousel page
  */
-router.get('/generate-image', async (c) => {
+router.get('/generate-carousel', async (c) => {
   try {
     const apiBase = c.env.APP_URL;
-    const html = generateImagePage({ apiBase, userId: DEFAULT_USER_ID });
+    const html = generateCarouselPage({ apiBase });
     return c.html(html);
   } catch (error: any) {
-    console.error('Generate Image page error:', error);
-    return c.html(errorPage('Generate Image Error', error.message), 500);
+    console.error('Generate Carousel page error:', error);
+    return c.html(errorPage('Generate Carousel Error', error.message), 500);
   }
 });
 
@@ -200,38 +178,49 @@ router.get('/claude-sessions', async (c) => {
 });
 
 /**
- * GET /dashboard/profiles
- * Airtable profiles and websites page
+ * GET /dashboard/settings
+ * Unified settings page - AI models, webhooks, and Airtable configuration
  */
-router.get('/profiles', async (c) => {
+router.get('/settings', async (c) => {
   try {
     const apiBase = c.env.APP_URL;
+
+    // Get current settings from KV
+    const settingsJson = await c.env.CACHE.get('app:settings');
+    const settings = settingsJson ? JSON.parse(settingsJson) : {};
+
+    // Prepare display settings with array-based models
+    const displaySettings = {
+      textModels: settings.textModels || [],
+      imageModels: settings.imageModels || [],
+      videoModels: settings.videoModels || [],
+      imageGenModels: settings.imageGenModels || [],
+      openrouterApiKey: settings.openrouterApiKey
+        ? '••••••••' + settings.openrouterApiKey.slice(-4)
+        : undefined,
+    };
+
+    // Get webhooks count for Settings tab
+    const webhooksResult = await c.env.DB.prepare('SELECT COUNT(*) as count FROM webhook_events').first<any>();
+    const webhooksCount = webhooksResult?.count || 0;
+
+    // Check if Airtable is configured
     const airtable = new AirtableService(c.env);
-    const configured = airtable.isConfigured();
+    const airtableConfigured = airtable.isConfigured();
     const airtableBaseId = c.env.AIRTABLE_BASE_ID || '';
 
-    let profilesCount = 0;
-    let websitesCount = 0;
-
-    if (configured) {
-      try {
-        const [profiles, websites] = await Promise.all([
-          airtable.listUserProfiles(),
-          airtable.listWebsites()
-        ]);
-        profilesCount = profiles.length;
-        websitesCount = websites.length;
-      } catch (error) {
-        console.error('Error fetching Airtable data:', error);
-      }
-    }
-
-    const html = profilesPage({ profilesCount, websitesCount, apiBase, configured, airtableBaseId });
+    const html = settingsPage({
+      apiBase,
+      settings: displaySettings,
+      webhooksCount,
+      airtableConfigured,
+      airtableBaseId
+    });
     return c.html(html);
 
   } catch (error: any) {
-    console.error('Profiles page error:', error);
-    return c.html(errorPage('Profiles Error', error.message), 500);
+    console.error('Settings page error:', error);
+    return c.html(errorPage('Settings Error', error.message), 500);
   }
 });
 

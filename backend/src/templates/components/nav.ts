@@ -12,13 +12,12 @@ export function nav({ currentPage, apiBase }: NavProps): string {
   const links = [
     { path: '/dashboard', label: 'Overview', icon: '📊' },
     { path: '/dashboard/add', label: 'Add Content', icon: '➕' },
-    { path: '/dashboard/generate-image', label: 'Generate', icon: '🎨' },
+    { path: '/dashboard/generate-carousel', label: 'Carousel', icon: '📱' },
     { path: '/dashboard/memories', label: 'Memories', icon: '🧠' },
     { path: '/dashboard/ai-content', label: 'AI Content', icon: '✨' },
-    { path: '/dashboard/ai-images', label: 'AI Images', icon: '🖼️' },
+    { path: '/dashboard/ai-images', label: 'AI Images', icon: '🎨' },
     { path: '/dashboard/claude-sessions', label: 'Claude', icon: '🤖' },
-    { path: '/dashboard/webhooks', label: 'Webhooks', icon: '📡' },
-    { path: '/dashboard/profiles', label: 'Airtable', icon: '📊' },
+    { path: '/dashboard/settings', label: 'Settings', icon: '⚙️' },
   ];
 
   return `

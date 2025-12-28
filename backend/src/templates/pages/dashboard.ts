@@ -6,6 +6,7 @@ import { baseLayout } from '../layouts/base';
 import { nav } from '../components/nav';
 import { pageHeader } from '../components/page-header';
 import { statCard } from '../components/stat-card';
+import { skeletonStyles } from '../components/skeleton';
 
 export interface DashboardStats {
   posts: {
@@ -106,7 +107,17 @@ export function dashboardPage({ stats, apiBase }: DashboardProps): string {
       <div class="card mt-3">
         <h2 class="card-title">📋 Recent Activity</h2>
         <div id="recent-activity">
-          <div class="loading"></div>
+          <div class="activity-skeleton">
+            ${Array(5).fill(0).map(() => `
+              <div class="skeleton-activity-item">
+                <div class="skeleton-activity-icon"></div>
+                <div class="skeleton-activity-content">
+                  <div class="skeleton-activity-text"></div>
+                  <div class="skeleton-activity-meta"></div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
         </div>
       </div>
     </div>
@@ -114,6 +125,60 @@ export function dashboardPage({ stats, apiBase }: DashboardProps): string {
 
   const styles = `
     <style>
+      ${skeletonStyles}
+
+      /* Activity Skeleton */
+      .activity-skeleton {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+
+      .skeleton-activity-item {
+        display: flex;
+        gap: 1rem;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .skeleton-activity-item:last-child {
+        border-bottom: none;
+      }
+
+      .skeleton-activity-icon {
+        width: 24px;
+        height: 24px;
+        border-radius: 4px;
+        background: linear-gradient(90deg, var(--background) 25%, #f0f0f0 50%, var(--background) 75%);
+        background-size: 200% 100%;
+        animation: skeleton-loading 1.5s ease-in-out infinite;
+        flex-shrink: 0;
+      }
+
+      .skeleton-activity-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+
+      .skeleton-activity-text {
+        height: 16px;
+        border-radius: 4px;
+        background: linear-gradient(90deg, var(--background) 25%, #f0f0f0 50%, var(--background) 75%);
+        background-size: 200% 100%;
+        animation: skeleton-loading 1.5s ease-in-out infinite;
+      }
+
+      .skeleton-activity-meta {
+        height: 12px;
+        width: 60%;
+        border-radius: 4px;
+        background: linear-gradient(90deg, var(--background) 25%, #f0f0f0 50%, var(--background) 75%);
+        background-size: 200% 100%;
+        animation: skeleton-loading 1.5s ease-in-out infinite;
+      }
+
       .section-title {
         font-size: 1.25rem;
         font-weight: 600;
