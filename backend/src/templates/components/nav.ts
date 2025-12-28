@@ -9,15 +9,30 @@ export interface NavProps {
 }
 
 export function nav({ currentPage, apiBase }: NavProps): string {
-  const links = [
-    { path: '/dashboard', label: 'Overview', icon: '📊' },
-    { path: '/dashboard/add', label: 'Add Content', icon: '➕' },
-    { path: '/dashboard/generate-carousel', label: 'Carousel', icon: '📱' },
-    { path: '/dashboard/memories', label: 'Memories', icon: '🧠' },
-    { path: '/dashboard/ai-content', label: 'AI Content', icon: '✨' },
-    { path: '/dashboard/ai-images', label: 'AI Images', icon: '🎨' },
-    { path: '/dashboard/claude-sessions', label: 'Claude', icon: '🤖' },
-    { path: '/dashboard/settings', label: 'Settings', icon: '⚙️' },
+  const linkGroups = [
+    {
+      label: 'Content',
+      links: [
+        { path: '/dashboard', label: 'Overview', icon: '📊' },
+        { path: '/dashboard/memories', label: 'Memories', icon: '🧠' },
+        { path: '/dashboard/ai-content', label: 'AI Content', icon: '✨' },
+      ]
+    },
+    {
+      label: 'Create',
+      links: [
+        { path: '/dashboard/add', label: 'Add Content', icon: '➕' },
+        { path: '/dashboard/ai-images', label: 'AI Images', icon: '🎨' },
+        { path: '/dashboard/generate-carousel', label: 'Carousel', icon: '📱' },
+      ]
+    },
+    {
+      label: 'Admin',
+      links: [
+        { path: '/dashboard/claude-sessions', label: 'Claude', icon: '🤖' },
+        { path: '/dashboard/settings', label: 'Settings', icon: '⚙️' },
+      ]
+    }
   ];
 
   return `
@@ -26,11 +41,16 @@ export function nav({ currentPage, apiBase }: NavProps): string {
         <a href="/dashboard">🧠 My Memory</a>
       </div>
       <div class="nav-links">
-        ${links.map(link => `
-          <a href="${link.path}" class="nav-link ${currentPage === link.path ? 'active' : ''}">
-            <span class="nav-icon">${link.icon}</span>
-            <span class="nav-label">${link.label}</span>
-          </a>
+        ${linkGroups.map((group, groupIndex) => `
+          ${groupIndex > 0 ? '<div class="nav-separator"></div>' : ''}
+          <div class="nav-group">
+            ${group.links.map(link => `
+              <a href="${link.path}" class="nav-link ${currentPage === link.path ? 'active' : ''}">
+                <span class="nav-icon">${link.icon}</span>
+                <span class="nav-label">${link.label}</span>
+              </a>
+            `).join('')}
+          </div>
         `).join('')}
       </div>
     </nav>
@@ -59,6 +79,19 @@ export function nav({ currentPage, apiBase }: NavProps): string {
       .nav-links {
         display: flex;
         gap: 0.5rem;
+        align-items: center;
+      }
+
+      .nav-group {
+        display: flex;
+        gap: 0.5rem;
+      }
+
+      .nav-separator {
+        width: 1px;
+        height: 24px;
+        background: var(--border);
+        margin: 0 0.5rem;
       }
 
       .nav-link {
@@ -88,6 +121,29 @@ export function nav({ currentPage, apiBase }: NavProps): string {
         font-size: 1rem;
       }
 
+      @media (max-width: 968px) {
+        .dashboard-nav {
+          padding: 0 1rem;
+        }
+
+        .nav-links {
+          gap: 0.25rem;
+        }
+
+        .nav-group {
+          gap: 0.25rem;
+        }
+
+        .nav-separator {
+          margin: 0 0.25rem;
+        }
+
+        .nav-link {
+          padding: 0.5rem 0.75rem;
+          font-size: 0.8rem;
+        }
+      }
+
       @media (max-width: 768px) {
         .dashboard-nav {
           padding: 0 1rem;
@@ -100,6 +156,16 @@ export function nav({ currentPage, apiBase }: NavProps): string {
           flex-wrap: wrap;
           justify-content: center;
           margin-top: 0.5rem;
+          gap: 0.5rem;
+        }
+
+        .nav-group {
+          flex-wrap: wrap;
+          justify-content: center;
+        }
+
+        .nav-separator {
+          display: none;
         }
 
         .nav-link {
