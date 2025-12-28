@@ -30,6 +30,7 @@ export function nav({ currentPage, apiBase }: NavProps): string {
     {
       label: 'Admin',
       links: [
+        { path: '/dashboard/tasks', label: 'Tasks', icon: '📋' },
         { path: '/dashboard/claude-sessions', label: 'Claude', icon: '🤖' },
         { path: '/dashboard/settings', label: 'Settings', icon: '⚙️' },
       ]

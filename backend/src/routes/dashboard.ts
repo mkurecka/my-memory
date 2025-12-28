@@ -9,6 +9,7 @@ import { generateCarouselPage } from '../templates/pages/generate-carousel';
 import { claudeSessionsPage } from '../templates/pages/claude-sessions';
 import { settingsPage } from '../templates/pages/settings';
 import { allContentPage } from '../templates/pages/all-content';
+import { tasksPage } from '../templates/pages/tasks';
 import { AirtableService } from '../services/airtable';
 
 const router = new Hono<{ Bindings: Env }>();
@@ -255,6 +256,20 @@ router.get('/settings', async (c) => {
   } catch (error: any) {
     console.error('Settings page error:', error);
     return c.html(errorPage('Settings Error', error.message), 500);
+  }
+});
+
+/**
+ * GET /dashboard/tasks
+ * Tasks history page - view and manage tasks with conversation threading
+ */
+router.get('/tasks', async (c) => {
+  try {
+    const html = tasksPage();
+    return c.html(html);
+  } catch (error: any) {
+    console.error('Tasks page error:', error);
+    return c.html(errorPage('Tasks Error', error.message), 500);
   }
 });
 

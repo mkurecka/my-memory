@@ -783,20 +783,15 @@ export function tweetsPage({ count, apiBase }: TweetsPageProps): string {
           const context = item.context_json ? JSON.parse(item.context_json) : {};
 
           const payload = {
-            event: 'memory_task',
-            data: {
-              task: task,
-              itemId: itemId,
-              itemType: itemType,
-              text: item.original_text || context.text || '',
-              url: context.url || '',
-              author: context.author || {},
-              context: context,
-              createdAt: new Date().toISOString()
-            }
+            task: task,
+            source_item_id: itemId,
+            source_item_type: itemType,
+            source_text: item.original_text || context.text || '',
+            source_url: context.url || '',
+            source_context: context
           };
 
-          const response = await fetch(API_BASE + '/api/v1/webhook', {
+          const response = await fetch(API_BASE + '/api/tasks', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -805,9 +800,19 @@ export function tweetsPage({ count, apiBase }: TweetsPageProps): string {
           const result = await response.json();
 
           if (result.success) {
-            status.textContent = '✓ Task sent successfully!';
+            status.textContent = '✓ Task created successfully!';
             status.style.color = '#22c55e';
             input.value = '';
+
+            // Still send webhook for backward compatibility
+            fetch(API_BASE + '/api/v1/webhook', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                event: 'memory_task',
+                data: { ...payload, task_id: result.task_id }
+              })
+            }).catch(console.error);
           } else {
             status.textContent = 'Failed: ' + (result.error || 'Unknown error');
             status.style.color = '#ef4444';
