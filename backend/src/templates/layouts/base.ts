@@ -16,7 +16,7 @@ export function baseLayout({ title, content, styles = '', scripts = '' }: BaseLa
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Universal Text Processor Dashboard">
+  <meta name="description" content="My Memory 🧠 Dashboard">
   <title>${title}</title>
 
   <!-- Global Styles -->
@@ -137,7 +137,32 @@ export function baseLayout({ title, content, styles = '', scripts = '' }: BaseLa
       to { transform: rotate(360deg); }
     }
 
-    /* Responsive */
+    /* Form Elements - Mobile Optimized */
+    input[type="text"],
+    input[type="email"],
+    input[type="url"],
+    input[type="number"],
+    textarea,
+    select {
+      font-size: 16px; /* Prevents zoom on iOS */
+      min-height: 44px; /* Touch-friendly size */
+    }
+
+    /* Button - Mobile Optimized */
+    button,
+    .btn {
+      min-height: 44px; /* Touch-friendly size */
+      min-width: 44px;
+      padding: 0.75rem 1.5rem;
+    }
+
+    /* Responsive Breakpoints */
+    @media (max-width: 1024px) {
+      .container {
+        max-width: 100%;
+      }
+    }
+
     @media (max-width: 768px) {
       .container {
         padding: 1rem;
@@ -145,6 +170,47 @@ export function baseLayout({ title, content, styles = '', scripts = '' }: BaseLa
 
       .grid-2, .grid-3, .grid-4 {
         grid-template-columns: 1fr;
+      }
+
+      h1 { font-size: 1.75rem; }
+      h2 { font-size: 1.5rem; }
+      h3 { font-size: 1.25rem; }
+
+      .card {
+        padding: 1.25rem;
+        margin-bottom: 1rem;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .container {
+        padding: 0.75rem;
+      }
+
+      h1 { font-size: 1.5rem; }
+      h2 { font-size: 1.25rem; }
+      h3 { font-size: 1.125rem; }
+
+      .card {
+        padding: 1rem;
+        border-radius: 8px;
+      }
+
+      button,
+      .btn {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+
+    /* Touch-friendly interactions */
+    @media (hover: none) and (pointer: coarse) {
+      a, button {
+        min-height: 44px;
+        min-width: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
       }
     }
   </style>

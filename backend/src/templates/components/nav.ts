@@ -41,7 +41,15 @@ export function nav({ currentPage, apiBase }: NavProps): string {
       <div class="nav-brand">
         <a href="/dashboard">🧠 My Memory</a>
       </div>
-      <div class="nav-links">
+
+      <!-- Mobile Menu Toggle -->
+      <button class="mobile-menu-toggle" id="mobile-menu-toggle" aria-label="Toggle menu">
+        <span class="hamburger"></span>
+        <span class="hamburger"></span>
+        <span class="hamburger"></span>
+      </button>
+
+      <div class="nav-links" id="nav-links">
         ${linkGroups.map((group, groupIndex) => `
           ${groupIndex > 0 ? '<div class="nav-separator"></div>' : ''}
           <div class="nav-group">
@@ -55,6 +63,40 @@ export function nav({ currentPage, apiBase }: NavProps): string {
         `).join('')}
       </div>
     </nav>
+
+    <script>
+      // Mobile menu toggle
+      (function() {
+        const toggle = document.getElementById('mobile-menu-toggle');
+        const navLinks = document.getElementById('nav-links');
+
+        if (toggle && navLinks) {
+          toggle.addEventListener('click', function() {
+            navLinks.classList.toggle('active');
+            toggle.classList.toggle('active');
+            document.body.classList.toggle('nav-open');
+          });
+
+          // Close menu when clicking a link
+          navLinks.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', function() {
+              navLinks.classList.remove('active');
+              toggle.classList.remove('active');
+              document.body.classList.remove('nav-open');
+            });
+          });
+
+          // Close menu when clicking outside
+          document.addEventListener('click', function(e) {
+            if (!toggle.contains(e.target) && !navLinks.contains(e.target)) {
+              navLinks.classList.remove('active');
+              toggle.classList.remove('active');
+              document.body.classList.remove('nav-open');
+            }
+          });
+        }
+      })();
+    </script>
 
     <style>
       .dashboard-nav {
@@ -122,6 +164,45 @@ export function nav({ currentPage, apiBase }: NavProps): string {
         font-size: 1rem;
       }
 
+      /* Mobile Menu Toggle */
+      .mobile-menu-toggle {
+        display: none;
+        flex-direction: column;
+        justify-content: space-around;
+        width: 32px;
+        height: 32px;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        padding: 0;
+        z-index: 101;
+      }
+
+      .hamburger {
+        width: 100%;
+        height: 3px;
+        background: var(--text-primary);
+        border-radius: 2px;
+        transition: all 0.3s;
+      }
+
+      .mobile-menu-toggle.active .hamburger:nth-child(1) {
+        transform: rotate(45deg) translate(8px, 8px);
+      }
+
+      .mobile-menu-toggle.active .hamburger:nth-child(2) {
+        opacity: 0;
+      }
+
+      .mobile-menu-toggle.active .hamburger:nth-child(3) {
+        transform: rotate(-45deg) translate(7px, -7px);
+      }
+
+      /* Prevent body scroll when menu is open */
+      body.nav-open {
+        overflow: hidden;
+      }
+
       @media (max-width: 968px) {
         .dashboard-nav {
           padding: 0 1rem;
@@ -147,34 +228,61 @@ export function nav({ currentPage, apiBase }: NavProps): string {
 
       @media (max-width: 768px) {
         .dashboard-nav {
-          padding: 0 1rem;
-          flex-direction: column;
-          height: auto;
           padding: 1rem;
+          height: 60px;
+        }
+
+        .mobile-menu-toggle {
+          display: flex;
         }
 
         .nav-links {
-          flex-wrap: wrap;
-          justify-content: center;
-          margin-top: 0.5rem;
-          gap: 0.5rem;
+          position: fixed;
+          top: 60px;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: var(--surface);
+          flex-direction: column;
+          align-items: stretch;
+          padding: 1.5rem 1rem;
+          gap: 1rem;
+          transform: translateX(-100%);
+          transition: transform 0.3s ease-in-out;
+          overflow-y: auto;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+          z-index: 100;
+        }
+
+        .nav-links.active {
+          transform: translateX(0);
         }
 
         .nav-group {
-          flex-wrap: wrap;
-          justify-content: center;
+          flex-direction: column;
+          gap: 0.5rem;
         }
 
         .nav-separator {
-          display: none;
+          width: 100%;
+          height: 1px;
+          background: var(--border);
+          margin: 0.5rem 0;
         }
 
         .nav-link {
-          padding: 0.5rem 0.75rem;
+          padding: 0.875rem 1rem;
+          border-radius: 8px;
+          font-size: 1rem;
+          justify-content: flex-start;
         }
 
         .nav-label {
-          display: none;
+          display: inline;
+        }
+
+        .nav-icon {
+          font-size: 1.25rem;
         }
       }
     </style>
