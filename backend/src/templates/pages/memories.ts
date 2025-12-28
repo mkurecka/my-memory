@@ -872,11 +872,16 @@ export function memoriesPage({ count, apiBase }: MemoriesPageProps): string {
               });
 
               if (webhookResponse.ok) {
-                const webhookData = await webhookResponse.json();
+                let webhookData = await webhookResponse.json();
+
+                // Handle array responses (extract first element)
+                if (Array.isArray(webhookData) && webhookData.length > 0) {
+                  webhookData = webhookData[0];
+                }
 
                 // Save webhook response to task conversation thread
-                if (webhookData && (webhookData.message || webhookData.response || webhookData.data)) {
-                  const responseText = webhookData.message || webhookData.response || JSON.stringify(webhookData.data);
+                if (webhookData && (webhookData.output || webhookData.message || webhookData.response || webhookData.data)) {
+                  const responseText = webhookData.output || webhookData.message || webhookData.response || JSON.stringify(webhookData.data);
 
                   await fetch(API_BASE + '/api/tasks/' + result.task_id + '/follow-up', {
                     method: 'POST',
