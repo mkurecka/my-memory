@@ -172,6 +172,155 @@ export function tasksPage({ apiBase }: TasksPageProps) {
       @keyframes spin {
         to { transform: rotate(360deg); }
       }
+
+      /* Form Elements */
+      .label {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 0.5rem;
+      }
+
+      .input, .task-textarea {
+        width: 100%;
+        padding: 0.75rem;
+        border: 2px solid var(--border-color);
+        border-radius: 8px;
+        font-size: 0.9375rem;
+        font-family: inherit;
+        line-height: 1.5;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        transition: all 0.2s ease;
+      }
+
+      .input:focus, .task-textarea:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+      }
+
+      /* Card Elements */
+      .card {
+        padding: 1rem;
+        background: var(--bg-primary);
+      }
+
+      .card-bordered {
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+      }
+
+      /* Buttons */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.625rem 1.25rem;
+        border: none;
+        border-radius: 8px;
+        font-size: 0.9375rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-decoration: none;
+      }
+
+      .btn:hover {
+        transform: translateY(-1px);
+      }
+
+      .btn:active {
+        transform: translateY(0);
+      }
+
+      .btn-primary {
+        background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
+        color: white;
+        box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+      }
+
+      .btn-primary:hover {
+        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+      }
+
+      .btn-secondary {
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        border: 1px solid var(--border-color);
+      }
+
+      .btn-secondary:hover {
+        background: var(--bg-tertiary);
+      }
+
+      .btn-error {
+        background: #ef4444;
+        color: white;
+        box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+      }
+
+      .btn-error:hover {
+        background: #dc2626;
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+      }
+
+      .btn-ghost {
+        background: transparent;
+        color: var(--text-secondary);
+      }
+
+      .btn-ghost:hover {
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+      }
+
+      .btn-sm {
+        padding: 0.375rem 0.75rem;
+        font-size: 0.875rem;
+      }
+
+      /* Utility Classes */
+      .space-y-4 > * + * {
+        margin-top: 1rem;
+      }
+
+      .flex {
+        display: flex;
+      }
+
+      .gap-2 {
+        gap: 0.5rem;
+      }
+
+      .justify-end {
+        justify-content: flex-end;
+      }
+
+      .mt-2 {
+        margin-top: 0.5rem;
+      }
+
+      .text-secondary {
+        color: var(--text-secondary);
+      }
+
+      .text-tertiary {
+        color: var(--text-tertiary);
+      }
+
+      .text-sm {
+        font-size: 0.875rem;
+      }
+
+      .text-xs {
+        font-size: 0.75rem;
+      }
+
+      .mb-1 {
+        margin-bottom: 0.25rem;
+      }
     </style>
 
     <script>

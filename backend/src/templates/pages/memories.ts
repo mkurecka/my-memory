@@ -439,6 +439,140 @@ export function memoriesPage({ count, apiBase }: MemoriesPageProps): string {
         align-items: center;
         gap: 0.5rem;
       }
+
+      /* Task Section Styles */
+      .task-section {
+        margin-top: 2rem;
+        padding: 1.5rem;
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(168, 85, 247, 0.05) 100%);
+        border: 1px solid rgba(99, 102, 241, 0.2);
+        border-radius: 12px;
+        transition: all 0.3s ease;
+      }
+
+      .task-section:hover {
+        border-color: rgba(99, 102, 241, 0.4);
+        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.1);
+      }
+
+      .task-header {
+        margin-bottom: 1.25rem;
+      }
+
+      .task-header-content {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+      }
+
+      .task-icon {
+        font-size: 2rem;
+        line-height: 1;
+        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+      }
+
+      .task-title {
+        font-size: 1.125rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin: 0;
+        line-height: 1.3;
+      }
+
+      .task-subtitle {
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+        margin: 0.25rem 0 0 0;
+        line-height: 1.4;
+      }
+
+      .task-form {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .task-input-wrapper {
+        position: relative;
+      }
+
+      .task-textarea {
+        width: 100%;
+        padding: 1rem;
+        border: 2px solid var(--border);
+        border-radius: 10px;
+        font-size: 0.9375rem;
+        font-family: inherit;
+        line-height: 1.6;
+        resize: vertical;
+        min-height: 100px;
+        transition: all 0.2s ease;
+        background: var(--bg-primary);
+      }
+
+      .task-textarea:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+      }
+
+      .task-textarea::placeholder {
+        color: var(--text-tertiary);
+      }
+
+      .task-actions {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+      }
+
+      .task-submit-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1.5rem;
+        background: linear-gradient(135deg, var(--primary) 0%, #7c3aed 100%);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        font-weight: 600;
+        font-size: 0.9375rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+      }
+
+      .task-submit-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+      }
+
+      .task-submit-btn:active {
+        transform: translateY(0);
+      }
+
+      .btn-icon {
+        font-size: 1.125rem;
+        line-height: 1;
+      }
+
+      .task-status {
+        font-size: 0.875rem;
+        font-weight: 500;
+        transition: color 0.2s ease;
+      }
+
+      .task-status.success {
+        color: #22c55e;
+      }
+
+      .task-status.error {
+        color: #ef4444;
+      }
+
+      .task-status.loading {
+        color: var(--text-secondary);
+      }
     </style>
   `;
 
@@ -631,13 +765,31 @@ export function memoriesPage({ count, apiBase }: MemoriesPageProps): string {
             <button onclick="copyToClipboard(decodeURIComponent('\${encodeURIComponent(text)}'))">📋 Copy Text</button>
           </div>
 
-          <div class="detail-section">
-            <h3 class="detail-section-title">🤖 Create Task from Memory</h3>
-            <form id="task-form" onsubmit="submitTask(event, '\${item.id}', 'memory')">
-              <textarea id="task-input" placeholder="Describe what you want to do with this memory..." rows="3" style="width:100%;padding:0.75rem;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;resize:vertical;margin-bottom:0.75rem;"></textarea>
-              <div style="display:flex;gap:0.75rem;align-items:center;">
-                <button type="submit" style="background:var(--primary);color:white;border:none;padding:0.625rem 1.25rem;border-radius:8px;font-weight:500;cursor:pointer;">📤 Send Task</button>
-                <span id="task-status" style="font-size:0.875rem;color:var(--text-secondary);"></span>
+          <div class="task-section">
+            <div class="task-header">
+              <div class="task-header-content">
+                <div class="task-icon">🤖</div>
+                <div>
+                  <h3 class="task-title">Create Task</h3>
+                  <p class="task-subtitle">Turn this memory into an actionable task</p>
+                </div>
+              </div>
+            </div>
+            <form id="task-form" class="task-form" onsubmit="submitTask(event, '\${item.id}', 'memory')">
+              <div class="task-input-wrapper">
+                <textarea
+                  id="task-input"
+                  class="task-textarea"
+                  placeholder="What do you want to do with this memory? Be specific..."
+                  rows="4"
+                ></textarea>
+              </div>
+              <div class="task-actions">
+                <button type="submit" class="task-submit-btn">
+                  <span class="btn-icon">📤</span>
+                  <span>Create Task</span>
+                </button>
+                <span id="task-status" class="task-status"></span>
               </div>
             </form>
           </div>
@@ -674,13 +826,13 @@ export function memoriesPage({ count, apiBase }: MemoriesPageProps): string {
         const task = input.value.trim();
 
         if (!task) {
-          status.textContent = 'Please enter a task description';
-          status.style.color = '#ef4444';
+          status.className = 'task-status error';
+          status.textContent = '⚠️ Please enter a task description';
           return;
         }
 
-        status.textContent = 'Sending...';
-        status.style.color = 'var(--text-secondary)';
+        status.className = 'task-status loading';
+        status.textContent = '⏳ Creating task...';
 
         try {
           const item = window.currentItem;
@@ -704,8 +856,8 @@ export function memoriesPage({ count, apiBase }: MemoriesPageProps): string {
           const result = await response.json();
 
           if (result.success) {
+            status.className = 'task-status success';
             status.textContent = '✓ Task created successfully!';
-            status.style.color = '#22c55e';
             input.value = '';
 
             // Still send webhook for backward compatibility
@@ -718,12 +870,12 @@ export function memoriesPage({ count, apiBase }: MemoriesPageProps): string {
               })
             }).catch(console.error);
           } else {
-            status.textContent = 'Failed: ' + (result.error || 'Unknown error');
-            status.style.color = '#ef4444';
+            status.className = 'task-status error';
+            status.textContent = '❌ ' + (result.error || 'Unknown error');
           }
         } catch (error) {
-          status.textContent = 'Error: ' + error.message;
-          status.style.color = '#ef4444';
+          status.className = 'task-status error';
+          status.textContent = '❌ Error: ' + error.message;
         }
       }
 
