@@ -17,6 +17,7 @@ import searchRoutes from './routes/search';
 import dashboardRoutes from './routes/dashboard';
 import mobileRoutes from './routes/mobile';
 import claudeSessionsRoutes from './routes/claude-sessions';
+import exportRoutes from './routes/export';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -163,6 +164,7 @@ app.route('/api/visual-content', visualContentRoutes);
 app.route('/api/airtable', airtableRoutes);
 app.route('/api/proxy', proxyRoutes);
 app.route('/api/search', searchRoutes);
+app.route('/api/export', exportRoutes);
 
 // Webhook routes (v1 for backward compatibility)
 app.route('/api/v1/webhook', webhookRoutes);

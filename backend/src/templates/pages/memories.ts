@@ -36,6 +36,9 @@ export function memoriesPage({ count, apiBase }: MemoriesPageProps): string {
             <option value="newest">Newest first</option>
             <option value="oldest">Oldest first</option>
           </select>
+          <button class="btn btn-secondary btn-sm" onclick="exportMemories()">
+            📥 Export
+          </button>
         </div>
       </div>
 
@@ -718,6 +721,27 @@ export function memoriesPage({ count, apiBase }: MemoriesPageProps): string {
         } catch (error) {
           status.textContent = 'Error: ' + error.message;
           status.style.color = '#ef4444';
+        }
+      }
+
+      async function exportMemories() {
+        try {
+          const response = await fetch(API_BASE + '/api/export/memories');
+          if (!response.ok) throw new Error('Export failed');
+
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'memories-export-' + Date.now() + '.json';
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          a.remove();
+
+          alert('✓ Memories exported successfully!');
+        } catch (error) {
+          alert('Failed to export: ' + error.message);
         }
       }
 

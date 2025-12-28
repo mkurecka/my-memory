@@ -79,6 +79,9 @@ export function allContentPage({ totalCount, counts, apiBase }: AllContentPagePr
             <option value="newest">Newest First</option>
             <option value="oldest">Oldest First</option>
           </select>
+          <button class="btn btn-secondary btn-sm" onclick="exportAllContent()">
+            📥 Export All
+          </button>
         </div>
       </div>
 
@@ -626,6 +629,27 @@ export function allContentPage({ totalCount, counts, apiBase }: AllContentPagePr
           clearTimeout(timeout);
           timeout = setTimeout(() => func.apply(this, args), wait);
         };
+      }
+
+      async function exportAllContent() {
+        try {
+          const response = await fetch(API_BASE + '/api/export/all');
+          if (!response.ok) throw new Error('Export failed');
+
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'full-export-' + Date.now() + '.json';
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          a.remove();
+
+          alert('✓ All content exported successfully!');
+        } catch (error) {
+          alert('Failed to export: ' + error.message);
+        }
       }
 
       // Initial load
