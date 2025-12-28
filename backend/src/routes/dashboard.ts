@@ -265,7 +265,8 @@ router.get('/settings', async (c) => {
  */
 router.get('/tasks', async (c) => {
   try {
-    const html = tasksPage();
+    const apiBase = c.env.APP_URL;
+    const html = tasksPage({ apiBase });
     return c.html(html);
   } catch (error: any) {
     console.error('Tasks page error:', error);

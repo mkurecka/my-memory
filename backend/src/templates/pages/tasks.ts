@@ -1,9 +1,17 @@
 import { baseLayout } from '../layouts/base';
+import { nav } from '../components/nav';
 
-export function tasksPage() {
+export interface TasksPageProps {
+  apiBase: string;
+}
+
+export function tasksPage({ apiBase }: TasksPageProps) {
   return baseLayout({
     title: 'Tasks History',
     content: `
+    ${nav({ currentPage: '/dashboard/tasks', apiBase })}
+
+    <div class="container">
     <div class="page-header">
       <div>
         <h1>📋 Tasks History</h1>
@@ -479,6 +487,7 @@ export function tasksPage() {
       // Load tasks on page load
       loadTasks();
     </script>
+    </div>
     `
   });
 }
