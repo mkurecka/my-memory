@@ -1,9 +1,9 @@
 import { baseLayout } from '../layouts/base';
 
 export function tasksPage() {
-  return baseLayout(
-    'Tasks History',
-    `
+  return baseLayout({
+    title: 'Tasks History',
+    content: `
     <div class="page-header">
       <div>
         <h1>📋 Tasks History</h1>
@@ -480,5 +480,5 @@ export function tasksPage() {
       loadTasks();
     </script>
     `
-  );
+  });
 }
