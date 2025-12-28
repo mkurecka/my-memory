@@ -55,52 +55,63 @@ export function tasksPage({ apiBase }: TasksPageProps) {
       .modal-overlay {
         position: fixed;
         inset: 0;
-        background: rgba(0, 0, 0, 0.5);
+        background: rgba(0, 0, 0, 0.6);
         display: flex;
         align-items: center;
         justify-content: center;
         z-index: 1000;
         backdrop-filter: blur(4px);
+        padding: 1rem;
       }
 
       .modal-content {
-        background: var(--bg-primary);
-        border-radius: var(--radius-lg);
+        position: relative;
+        background: var(--surface);
+        border-radius: 16px;
         max-width: 800px;
-        width: 90%;
+        width: 100%;
         max-height: 90vh;
         overflow: hidden;
         display: flex;
         flex-direction: column;
-        box-shadow: var(--shadow-xl);
+        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
       }
 
       .modal-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: var(--spacing-6);
-        border-bottom: 1px solid var(--border-color);
+        padding: 1.5rem;
+        border-bottom: 1px solid var(--border);
+        background: var(--surface);
+      }
+
+      .modal-header h2 {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin: 0;
       }
 
       .modal-body {
-        padding: var(--spacing-6);
+        padding: 1.5rem;
         overflow-y: auto;
         flex: 1;
+        background: var(--surface);
       }
 
       .task-card {
-        background: var(--bg-primary);
-        border: 1px solid var(--border-color);
-        border-radius: var(--radius-lg);
-        padding: var(--spacing-4);
-        transition: var(--transition-base);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1rem;
+        transition: all 0.2s ease;
         cursor: pointer;
       }
 
       .task-card:hover {
         border-color: var(--primary);
-        box-shadow: var(--shadow-md);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         transform: translateY(-2px);
       }
 
@@ -119,44 +130,44 @@ export function tasksPage({ apiBase }: TasksPageProps) {
       }
 
       .conversation-thread {
-        background: var(--bg-secondary);
-        border-radius: var(--radius-md);
-        padding: var(--spacing-4);
-        margin-top: var(--spacing-4);
+        background: var(--background);
+        border-radius: 8px;
+        padding: 1rem;
+        margin-top: 1rem;
       }
 
       .thread-message {
-        padding: var(--spacing-3);
-        margin-bottom: var(--spacing-2);
-        border-radius: var(--radius-md);
-        border-left: 3px solid var(--border-color);
+        padding: 0.75rem;
+        margin-bottom: 0.5rem;
+        border-radius: 8px;
+        border-left: 3px solid var(--border);
       }
 
       .thread-message.user {
-        background: var(--primary-50);
+        background: rgba(99, 102, 241, 0.1);
         border-left-color: var(--primary);
       }
 
       .thread-message.system {
-        background: var(--bg-tertiary);
-        border-left-color: var(--text-tertiary);
+        background: var(--background);
+        border-left-color: var(--text-secondary);
       }
 
       .follow-up-form {
-        margin-top: var(--spacing-4);
-        padding: var(--spacing-4);
-        background: var(--bg-secondary);
-        border-radius: var(--radius-md);
+        margin-top: 1rem;
+        padding: 1rem;
+        background: var(--background);
+        border-radius: 8px;
       }
 
       .source-info {
         display: flex;
-        gap: var(--spacing-2);
-        padding: var(--spacing-3);
-        background: var(--bg-secondary);
-        border-radius: var(--radius-md);
-        margin-top: var(--spacing-3);
-        font-size: var(--text-sm);
+        gap: 0.5rem;
+        padding: 0.75rem;
+        background: var(--background);
+        border-radius: 8px;
+        margin-top: 0.75rem;
+        font-size: 0.875rem;
       }
 
       .loading-spinner {
@@ -185,12 +196,12 @@ export function tasksPage({ apiBase }: TasksPageProps) {
       .input, .task-textarea {
         width: 100%;
         padding: 0.75rem;
-        border: 2px solid var(--border-color);
+        border: 2px solid var(--border);
         border-radius: 8px;
         font-size: 0.9375rem;
         font-family: inherit;
         line-height: 1.5;
-        background: var(--bg-primary);
+        background: var(--surface);
         color: var(--text-primary);
         transition: all 0.2s ease;
       }
@@ -204,11 +215,11 @@ export function tasksPage({ apiBase }: TasksPageProps) {
       /* Card Elements */
       .card {
         padding: 1rem;
-        background: var(--bg-primary);
+        background: var(--background);
       }
 
       .card-bordered {
-        border: 1px solid var(--border-color);
+        border: 1px solid var(--border);
         border-radius: 8px;
       }
 
