@@ -860,15 +860,37 @@ export function memoriesPage({ count, apiBase }: MemoriesPageProps): string {
             status.textContent = '✓ Task created successfully!';
             input.value = '';
 
-            // Still send webhook for backward compatibility
-            fetch(API_BASE + '/api/v1/webhook', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                event: 'memory_task',
-                data: { ...payload, task_id: result.task_id, is_new: true }
-              })
-            }).catch(console.error);
+            // Send webhook and capture response for thread history
+            try {
+              const webhookResponse = await fetch(API_BASE + '/api/v1/webhook', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  event: 'memory_task',
+                  data: { ...payload, task_id: result.task_id, is_new: true }
+                })
+              });
+
+              if (webhookResponse.ok) {
+                const webhookData = await webhookResponse.json();
+
+                // Save webhook response to task conversation thread
+                if (webhookData && (webhookData.message || webhookData.response || webhookData.data)) {
+                  const responseText = webhookData.message || webhookData.response || JSON.stringify(webhookData.data);
+
+                  await fetch(API_BASE + '/api/tasks/' + result.task_id + '/follow-up', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      type: 'system',
+                      message: responseText
+                    })
+                  });
+                }
+              }
+            } catch (webhookError) {
+              console.error('Webhook error:', webhookError);
+            }
           } else {
             status.className = 'task-status error';
             status.textContent = '❌ ' + (result.error || 'Unknown error');
