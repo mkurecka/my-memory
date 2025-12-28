@@ -810,7 +810,7 @@ export function tweetsPage({ count, apiBase }: TweetsPageProps): string {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 event: 'memory_task',
-                data: { ...payload, task_id: result.task_id }
+                data: { ...payload, task_id: result.task_id, is_new: true }
               })
             }).catch(console.error);
           } else {
