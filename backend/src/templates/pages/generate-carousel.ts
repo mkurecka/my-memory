@@ -26,9 +26,15 @@ export function generateCarouselPage({ apiBase }: GenerateCarouselPageProps): st
         <!-- Form -->
         <div class="form-section">
           <!-- AI Generation Section -->
-          <div class="ai-generation-section">
-            <h3>✨ Generate with AI</h3>
-            <div class="ai-form">
+          <details class="collapsible-section" open>
+            <summary class="section-header">
+              <span class="section-icon">✨</span>
+              <span class="section-title">Generate with AI</span>
+              <span class="section-badge">Recommended</span>
+            </summary>
+            <div class="section-content">
+              <p class="section-description">Let AI create carousel content for you. Just provide a topic and style preferences.</p>
+              <div class="ai-form">
               <div class="form-group">
                 <label for="topic">Topic / Idea</label>
                 <input type="text" id="topic" placeholder="e.g., 5 tips for better sleep, Benefits of meditation..." />
@@ -54,16 +60,56 @@ export function generateCarouselPage({ apiBase }: GenerateCarouselPageProps): st
                   </select>
                 </div>
               </div>
+              <div class="form-group">
+                <label for="languageAi">Language</label>
+                <select id="languageAi" name="languageAi">
+                  <option value="en">English</option>
+                  <option value="cs" selected>Czech (Čeština)</option>
+                  <option value="sk">Slovak (Slovenčina)</option>
+                  <option value="de">German (Deutsch)</option>
+                  <option value="es">Spanish (Español)</option>
+                  <option value="fr">French (Français)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="enableCtaAi" name="enableCtaAi" onchange="toggleCTAOptionsAi()" />
+                  <span>Add CTA (Call-to-Action) slide</span>
+                </label>
+              </div>
+              <div class="form-group" id="cta-type-group-ai" style="display: none;">
+                <label for="ctaTypeAi">CTA Type</label>
+                <select id="ctaTypeAi" name="ctaTypeAi" onchange="toggleCustomCTAMessageAi()">
+                  <option value="comment">Comment to get more</option>
+                  <option value="save">Save for later</option>
+                  <option value="follow" selected>Follow for more tips</option>
+                  <option value="share">Share with friends</option>
+                  <option value="visit">Visit our website</option>
+                  <option value="subscribe">Subscribe for updates</option>
+                  <option value="custom">Custom message</option>
+                </select>
+              </div>
+              <div class="form-group" id="cta-custom-group-ai" style="display: none;">
+                <label for="ctaCustomMessageAi">Custom CTA Message</label>
+                <input type="text" id="ctaCustomMessageAi" name="ctaCustomMessageAi" placeholder="Enter your custom message..." />
+              </div>
               <button type="button" id="generate-content-btn" class="btn-ai" onclick="generateContent()">
                 <span class="btn-text">✨ Generate Content</span>
                 <span class="btn-loading hidden">⏳ Generating...</span>
               </button>
             </div>
-          </div>
+            </div>
+          </details>
 
-          <div class="section-divider">
-            <span>or edit slides manually</span>
-          </div>
+          <!-- Manual Creation Section -->
+          <details class="collapsible-section">
+            <summary class="section-header">
+              <span class="section-icon">📝</span>
+              <span class="section-title">Manual Creation</span>
+              <span class="section-badge">Advanced</span>
+            </summary>
+            <div class="section-content">
+              <p class="section-description">Create carousel manually with full control over slides, templates, and styling.</p>
 
           <form id="carousel-form" class="content-form">
             <!-- Slides Content -->
@@ -218,6 +264,8 @@ export function generateCarouselPage({ apiBase }: GenerateCarouselPageProps): st
               <span class="btn-loading hidden">⏳ Generating slides...</span>
             </button>
           </form>
+            </div>
+          </details>
         </div>
 
         <!-- Preview -->
@@ -241,9 +289,41 @@ export function generateCarouselPage({ apiBase }: GenerateCarouselPageProps): st
       <!-- Status Messages -->
       <div id="status-message" class="status-message hidden"></div>
 
+      <!-- Carousel Viewer Modal -->
+      <div id="carousel-viewer-modal" class="modal-overlay hidden" onclick="closeCarouselViewer(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+          <div class="modal-header">
+            <h3>Carousel Preview</h3>
+            <button class="modal-close" onclick="closeCarouselViewer()">&times;</button>
+          </div>
+          <div id="carousel-viewer-content" class="modal-body">
+            <div class="loading-container"><div class="loading"></div></div>
+          </div>
+          <div class="modal-footer">
+            <button id="download-carousel-btn" class="btn-primary" onclick="downloadCarousel()">⬇️ Download All Slides</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Recent carousels -->
       <div class="recent-section">
-        <h3>Recent Carousels</h3>
+        <div class="recent-header">
+          <h3>📚 Recent Carousels</h3>
+          <div class="recent-toolbar">
+            <input type="text" id="carousel-search" placeholder="Search carousels..." />
+            <select id="carousel-filter">
+              <option value="">All Templates</option>
+              <option value="minimal">Minimal</option>
+              <option value="bold">Bold</option>
+              <option value="gradient">Gradient</option>
+              <option value="dark">Dark</option>
+              <option value="modern">Modern</option>
+              <option value="playful">Playful</option>
+              <option value="professional">Professional</option>
+              <option value="vibrant">Vibrant</option>
+            </select>
+          </div>
+        </div>
         <div id="recent-carousels" class="recent-carousels-grid">
           <div class="loading-container"><div class="loading"></div></div>
         </div>
@@ -266,11 +346,121 @@ export function generateCarouselPage({ apiBase }: GenerateCarouselPageProps): st
         }
       }
 
-      .content-form {
+      /* Collapsible Sections */
+      .collapsible-section {
         background: var(--surface);
         border-radius: 12px;
-        padding: 2rem;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        margin-bottom: 1.5rem;
+        overflow: hidden;
+      }
+
+      .section-header {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 1.25rem 1.5rem;
+        background: linear-gradient(135deg, var(--surface), var(--background));
+        cursor: pointer;
+        user-select: none;
+        transition: all 0.2s;
+        list-style: none;
+      }
+
+      .section-header::-webkit-details-marker {
+        display: none;
+      }
+
+      .section-header:hover {
+        background: var(--background);
+      }
+
+      .collapsible-section[open] .section-header {
+        border-bottom: 1px solid var(--border);
+      }
+
+      .section-icon {
+        font-size: 1.5rem;
+      }
+
+      .section-title {
+        flex: 1;
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+
+      .section-badge {
+        background: var(--primary-light);
+        color: var(--primary);
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 0.25rem 0.75rem;
+        border-radius: 99px;
+        text-transform: uppercase;
+      }
+
+      .section-content {
+        padding: 1.5rem;
+      }
+
+      .section-description {
+        margin-bottom: 1.5rem;
+        color: var(--text-secondary);
+        font-size: 0.95rem;
+        line-height: 1.6;
+      }
+
+      /* Recent Carousels Header */
+      .recent-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        gap: 1rem;
+        flex-wrap: wrap;
+      }
+
+      .recent-header h3 {
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: 600;
+      }
+
+      .recent-toolbar {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+      }
+
+      .recent-toolbar input {
+        padding: 0.625rem 1rem;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface);
+        font-size: 0.875rem;
+        min-width: 200px;
+      }
+
+      .recent-toolbar input:focus {
+        outline: none;
+        border-color: var(--primary);
+      }
+
+      .recent-toolbar select {
+        padding: 0.625rem 1rem;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface);
+        font-size: 0.875rem;
+        cursor: pointer;
+      }
+
+      .content-form {
+        background: transparent;
+        border-radius: 0;
+        padding: 0;
+        box-shadow: none;
       }
 
       .form-group {
@@ -759,6 +949,110 @@ export function generateCarouselPage({ apiBase }: GenerateCarouselPageProps): st
       .section-divider span {
         padding: 0 1rem;
       }
+
+      /* Modal Overlay */
+      .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.75);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        padding: 1rem;
+      }
+
+      .modal-overlay.hidden {
+        display: none;
+      }
+
+      .modal-content {
+        background: var(--surface);
+        border-radius: 12px;
+        max-width: 1200px;
+        max-height: 90vh;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      }
+
+      .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.5rem;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .modal-header h3 {
+        margin: 0;
+        color: var(--text-primary);
+      }
+
+      .modal-close {
+        background: none;
+        border: none;
+        font-size: 2rem;
+        color: var(--text-secondary);
+        cursor: pointer;
+        padding: 0;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        transition: background 0.2s;
+      }
+
+      .modal-close:hover {
+        background: var(--hover);
+      }
+
+      .modal-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1.5rem;
+      }
+
+      .modal-footer {
+        padding: 1.5rem;
+        border-top: 1px solid var(--border);
+        display: flex;
+        justify-content: flex-end;
+        gap: 1rem;
+      }
+
+      .carousel-viewer-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1rem;
+      }
+
+      .carousel-viewer-slide {
+        border-radius: 8px;
+        overflow: hidden;
+        background: var(--background);
+        border: 1px solid var(--border);
+      }
+
+      .carousel-viewer-slide img {
+        width: 100%;
+        height: auto;
+        display: block;
+      }
+
+      .carousel-viewer-slide-number {
+        padding: 0.5rem;
+        text-align: center;
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+        background: var(--surface);
+      }
     </style>
   `;
 
@@ -846,6 +1140,27 @@ export function generateCarouselPage({ apiBase }: GenerateCarouselPageProps): st
       function toggleCustomCTAMessage() {
         const ctaType = document.getElementById('ctaType').value;
         const customGroup = document.getElementById('cta-custom-group');
+        customGroup.style.display = ctaType === 'custom' ? 'block' : 'none';
+      }
+
+      // Toggle CTA options visibility (AI section)
+      function toggleCTAOptionsAi() {
+        const enableCTA = document.getElementById('enableCtaAi').checked;
+        const ctaTypeGroup = document.getElementById('cta-type-group-ai');
+        ctaTypeGroup.style.display = enableCTA ? 'block' : 'none';
+
+        // Also check if custom message should be shown
+        if (enableCTA) {
+          toggleCustomCTAMessageAi();
+        } else {
+          document.getElementById('cta-custom-group-ai').style.display = 'none';
+        }
+      }
+
+      // Toggle custom CTA message input (AI section)
+      function toggleCustomCTAMessageAi() {
+        const ctaType = document.getElementById('ctaTypeAi').value;
+        const customGroup = document.getElementById('cta-custom-group-ai');
         customGroup.style.display = ctaType === 'custom' ? 'block' : 'none';
       }
 
@@ -993,6 +1308,10 @@ export function generateCarouselPage({ apiBase }: GenerateCarouselPageProps): st
         const topic = document.getElementById('topic').value;
         const slideCountVal = document.getElementById('slideCountAi').value;
         const style = document.getElementById('contentStyle').value;
+        const language = document.getElementById('languageAi').value;
+        const ctaEnabled = document.getElementById('enableCtaAi').checked;
+        const ctaType = document.getElementById('ctaTypeAi').value;
+        const ctaMessage = document.getElementById('ctaCustomMessageAi').value;
 
         if (!topic.trim()) {
           showStatus('Please enter a topic or idea', 'error');
@@ -1013,7 +1332,11 @@ export function generateCarouselPage({ apiBase }: GenerateCarouselPageProps): st
             body: JSON.stringify({
               topic: topic,
               slideCount: parseInt(slideCountVal),
-              style: style
+              style: style,
+              language: language,
+              ctaEnabled: ctaEnabled,
+              ctaType: ctaType,
+              ctaMessage: ctaMessage
             })
           });
 
@@ -1083,24 +1406,19 @@ export function generateCarouselPage({ apiBase }: GenerateCarouselPageProps): st
       }
 
       // Load recent carousels
+      let allCarousels = [];
+      let currentSearchQuery = '';
+      let currentTemplateFilter = '';
+
       async function loadRecentCarousels() {
         const container = document.getElementById('recent-carousels');
         try {
-          const response = await fetch(API_BASE + '/api/proxy/carousels?limit=6');
+          const response = await fetch(API_BASE + '/api/proxy/carousels?limit=50');
           const data = await response.json();
 
           if (data.success && data.data && data.data.length > 0) {
-            container.innerHTML = data.data.map(carousel => {
-              const slides = carousel.slides || [];
-              const previewImages = slides.slice(0, 3).map(s =>
-                '<img src="' + s.url + '" alt="Slide" loading="lazy" />'
-              ).join('');
-
-              return '<div class="recent-carousel" onclick="viewCarousel(\\'' + carousel.id + '\\')">' +
-                '<div class="recent-carousel-preview">' + previewImages + '</div>' +
-                '<div class="recent-carousel-info">' + slides.length + ' slides • ' + new Date(carousel.createdAt).toLocaleDateString() + '</div>' +
-              '</div>';
-            }).join('');
+            allCarousels = data.data;
+            filterAndDisplayCarousels();
           } else {
             container.innerHTML = '<div class="no-carousels">No carousels created yet</div>';
           }
@@ -1110,9 +1428,148 @@ export function generateCarouselPage({ apiBase }: GenerateCarouselPageProps): st
         }
       }
 
-      function viewCarousel(id) {
-        // TODO: Open carousel detail view
-        console.log('View carousel:', id);
+      function filterAndDisplayCarousels() {
+        const container = document.getElementById('recent-carousels');
+
+        let filtered = allCarousels;
+
+        // Filter by template
+        if (currentTemplateFilter) {
+          filtered = filtered.filter(c => c.template === currentTemplateFilter);
+        }
+
+        // Filter by search query
+        if (currentSearchQuery) {
+          const query = currentSearchQuery.toLowerCase();
+          filtered = filtered.filter(c => {
+            const slides = c.slides || [];
+            const slideTexts = slides.map(s => (s.text || '').toLowerCase()).join(' ');
+            return slideTexts.includes(query);
+          });
+        }
+
+        if (filtered.length > 0) {
+          container.innerHTML = filtered.map(carousel => {
+            const slides = carousel.slides || [];
+            const previewImages = slides.slice(0, 3).map(s =>
+              '<img src="' + s.url + '" alt="Slide" loading="lazy" />'
+            ).join('');
+
+            return '<div class="recent-carousel" onclick="viewCarousel(\\'' + carousel.id + '\\')">' +
+              '<div class="recent-carousel-preview">' + previewImages + '</div>' +
+              '<div class="recent-carousel-info">' +
+                '<span class="template-badge">' + carousel.template + '</span> • ' +
+                slides.length + ' slides • ' +
+                new Date(carousel.createdAt).toLocaleDateString() +
+              '</div>' +
+            '</div>';
+          }).join('');
+        } else {
+          container.innerHTML = '<div class="no-carousels">No carousels match your filters</div>';
+        }
+      }
+
+      // Search and filter event listeners
+      document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('carousel-search');
+        const filterSelect = document.getElementById('carousel-filter');
+
+        if (searchInput) {
+          let searchTimeout;
+          searchInput.addEventListener('input', function(e) {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+              currentSearchQuery = e.target.value;
+              filterAndDisplayCarousels();
+            }, 300);
+          });
+        }
+
+        if (filterSelect) {
+          filterSelect.addEventListener('change', function(e) {
+            currentTemplateFilter = e.target.value;
+            filterAndDisplayCarousels();
+          });
+        }
+      });
+
+      // Global variable to store current carousel slides
+      let currentCarouselSlides = [];
+
+      async function viewCarousel(id) {
+        const modal = document.getElementById('carousel-viewer-modal');
+        const content = document.getElementById('carousel-viewer-content');
+
+        // Show modal with loading
+        modal.classList.remove('hidden');
+        content.innerHTML = '<div class="loading-container"><div class="loading"></div></div>';
+
+        try {
+          console.log('Fetching carousel:', id);
+          const response = await fetch(API_BASE + '/api/proxy/carousels/' + id);
+          console.log('Response status:', response.status);
+
+          const data = await response.json();
+          console.log('Response data:', data);
+
+          if (!response.ok) {
+            content.innerHTML = '<div class="no-carousels">Error: ' + (data.error || 'Failed to load carousel') + '</div>';
+            return;
+          }
+
+          if (data.success && data.data && data.data.slides) {
+            const carousel = data.data;
+            currentCarouselSlides = carousel.slides;
+
+            if (carousel.slides.length === 0) {
+              content.innerHTML = '<div class="no-carousels">This carousel has no slides</div>';
+              return;
+            }
+
+            // Render slides in grid
+            content.innerHTML = '<div class="carousel-viewer-grid">' +
+              carousel.slides.map((slide, idx) =>
+                '<div class="carousel-viewer-slide">' +
+                  '<img src="' + slide.url + '" alt="Slide ' + (idx + 1) + '" loading="lazy" />' +
+                  '<div class="carousel-viewer-slide-number">Slide ' + (idx + 1) + ' of ' + carousel.slides.length + '</div>' +
+                '</div>'
+              ).join('') +
+            '</div>';
+          } else {
+            console.error('Invalid response structure:', data);
+            content.innerHTML = '<div class="no-carousels">Failed to load carousel: Invalid response format</div>';
+          }
+        } catch (error) {
+          console.error('Failed to load carousel:', error);
+          content.innerHTML = '<div class="no-carousels">Error loading carousel: ' + error.message + '</div>';
+        }
+      }
+
+      function closeCarouselViewer(event) {
+        // Only close if clicking overlay (not modal content)
+        if (!event || event.target.id === 'carousel-viewer-modal' || !event.target.closest) {
+          document.getElementById('carousel-viewer-modal').classList.add('hidden');
+          currentCarouselSlides = [];
+        }
+      }
+
+      function downloadCarousel() {
+        if (currentCarouselSlides.length === 0) return;
+
+        currentCarouselSlides.forEach((slide, idx) => {
+          // Add small delay between downloads to avoid blocking
+          setTimeout(() => {
+            const link = document.createElement('a');
+            link.href = slide.url;
+            link.download = 'carousel-slide-' + (idx + 1) + '.png';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          }, idx * 200);
+        });
+
+        showStatus('Downloading ' + currentCarouselSlides.length + ' slides...', 'success');
+        setTimeout(hideStatus, 3000);
       }
 
       // Form submission
@@ -1159,14 +1616,8 @@ export function generateCarouselPage({ apiBase }: GenerateCarouselPageProps): st
           language: form.language.value
         };
 
-        // Add CTA slide if enabled
-        const enableCTA = form.enableCTA.checked;
-        if (enableCTA) {
-          const ctaType = form.ctaType.value;
-          const customMessage = form.ctaCustomMessage.value;
-          const ctaMessage = getCTAMessage(ctaType, customMessage, options.language);
-          slides.push(ctaMessage);
-        }
+        // Note: CTA slide is now generated by AI if enabled during content generation
+        // No need to add it manually here as it's already in the slide textareas
 
         const totalSlides = slides.length;
         showStatus('Generating ' + totalSlides + ' slides...', 'loading');
