@@ -110,6 +110,30 @@ export function generateCarouselPage({ apiBase }: GenerateCarouselPageProps): st
                     <span class="template-name">Dark</span>
                   </div>
                 </label>
+                <label class="template-option">
+                  <input type="radio" name="template" value="modern" />
+                  <div class="template-preview modern">
+                    <span class="template-name">Modern</span>
+                  </div>
+                </label>
+                <label class="template-option">
+                  <input type="radio" name="template" value="playful" />
+                  <div class="template-preview playful">
+                    <span class="template-name">Playful</span>
+                  </div>
+                </label>
+                <label class="template-option">
+                  <input type="radio" name="template" value="professional" />
+                  <div class="template-preview professional">
+                    <span class="template-name">Pro</span>
+                  </div>
+                </label>
+                <label class="template-option">
+                  <input type="radio" name="template" value="vibrant" />
+                  <div class="template-preview vibrant">
+                    <span class="template-name">Vibrant</span>
+                  </div>
+                </label>
               </div>
             </div>
 
@@ -140,12 +164,53 @@ export function generateCarouselPage({ apiBase }: GenerateCarouselPageProps): st
               </select>
             </div>
 
+            <!-- Language -->
+            <div class="form-group">
+              <label for="language">Language</label>
+              <select id="language" name="language">
+                <option value="en">English</option>
+                <option value="cs" selected>Czech (Čeština)</option>
+                <option value="sk">Slovak (Slovenčina)</option>
+                <option value="de">German (Deutsch)</option>
+                <option value="es">Spanish (Español)</option>
+                <option value="fr">French (Français)</option>
+              </select>
+            </div>
+
             <!-- Include Slide Numbers -->
             <div class="form-group">
               <label class="checkbox-label">
                 <input type="checkbox" id="showSlideNumbers" name="showSlideNumbers" checked />
                 <span>Show slide numbers (1/5, 2/5, etc.)</span>
               </label>
+            </div>
+
+            <!-- CTA Slide -->
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="enableCTA" name="enableCTA" onchange="toggleCTAOptions()" />
+                <span>Add CTA (Call-to-Action) slide at the end</span>
+              </label>
+            </div>
+
+            <!-- CTA Type (shown when CTA is enabled) -->
+            <div class="form-group" id="cta-type-group" style="display: none;">
+              <label for="ctaType">CTA Type</label>
+              <select id="ctaType" name="ctaType">
+                <option value="comment">Comment to get more</option>
+                <option value="save">Save for later</option>
+                <option value="follow">Follow for more tips</option>
+                <option value="share">Share with friends</option>
+                <option value="visit">Visit our website</option>
+                <option value="subscribe">Subscribe for updates</option>
+                <option value="custom">Custom message</option>
+              </select>
+            </div>
+
+            <!-- Custom CTA Message (shown when custom type is selected) -->
+            <div class="form-group" id="cta-custom-group" style="display: none;">
+              <label for="ctaCustomMessage">Custom CTA Message</label>
+              <input type="text" id="ctaCustomMessage" name="ctaCustomMessage" placeholder="Enter your custom message..." />
             </div>
 
             <button type="submit" class="btn-primary btn-generate">
@@ -312,6 +377,12 @@ export function generateCarouselPage({ apiBase }: GenerateCarouselPageProps): st
         gap: 1rem;
       }
 
+      @media (max-width: 768px) {
+        .template-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+
       .template-option {
         cursor: pointer;
       }
@@ -347,6 +418,26 @@ export function generateCarouselPage({ apiBase }: GenerateCarouselPageProps): st
 
       .template-preview.dark {
         background: #1f2937;
+        color: #ffffff;
+      }
+
+      .template-preview.modern {
+        background: linear-gradient(135deg, #667eea 0%, #f093fb 100%);
+        color: #ffffff;
+      }
+
+      .template-preview.playful {
+        background: linear-gradient(135deg, #ffa500 0%, #ff1493 100%);
+        color: #ffffff;
+      }
+
+      .template-preview.professional {
+        background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+        color: #ffffff;
+      }
+
+      .template-preview.vibrant {
+        background: linear-gradient(135deg, #ff6b6b 0%, #4ecdc4 100%);
         color: #ffffff;
       }
 
@@ -737,6 +828,87 @@ export function generateCarouselPage({ apiBase }: GenerateCarouselPageProps): st
         return div.innerHTML;
       }
 
+      // Toggle CTA options visibility
+      function toggleCTAOptions() {
+        const enableCTA = document.getElementById('enableCTA').checked;
+        const ctaTypeGroup = document.getElementById('cta-type-group');
+        ctaTypeGroup.style.display = enableCTA ? 'block' : 'none';
+
+        // Also check if custom message should be shown
+        if (enableCTA) {
+          toggleCustomCTAMessage();
+        } else {
+          document.getElementById('cta-custom-group').style.display = 'none';
+        }
+      }
+
+      // Toggle custom CTA message input
+      function toggleCustomCTAMessage() {
+        const ctaType = document.getElementById('ctaType').value;
+        const customGroup = document.getElementById('cta-custom-group');
+        customGroup.style.display = ctaType === 'custom' ? 'block' : 'none';
+      }
+
+      // Get CTA message based on type and language
+      function getCTAMessage(type, customMessage, language) {
+        const messages = {
+          en: {
+            comment: '💬 Comment "YES" to get the full guide',
+            save: '💾 Save this for later!',
+            follow: '👉 Follow for more tips',
+            share: '📤 Share with your friends',
+            visit: '🌐 Visit our website for more',
+            subscribe: '🔔 Subscribe for daily updates'
+          },
+          cs: {
+            comment: '💬 Napiš "ANO" pro kompletní průvodce',
+            save: '💾 Ulož si to na později!',
+            follow: '👉 Sleduj pro více tipů',
+            share: '📤 Sdílej s přáteli',
+            visit: '🌐 Navštiv náš web pro více',
+            subscribe: '🔔 Přihlas se k odběru denních novinek'
+          },
+          sk: {
+            comment: '💬 Napíš "ÁNO" pre kompletný návod',
+            save: '💾 Ulož si to na neskôr!',
+            follow: '👉 Sleduj pre viac tipov',
+            share: '📤 Zdieľaj s priateľmi',
+            visit: '🌐 Navštív náš web pre viac',
+            subscribe: '🔔 Prihlás sa k odberu denných noviniek'
+          },
+          de: {
+            comment: '💬 Kommentiere "JA" für den vollständigen Leitfaden',
+            save: '💾 Für später speichern!',
+            follow: '👉 Folge für mehr Tipps',
+            share: '📤 Mit Freunden teilen',
+            visit: '🌐 Besuche unsere Website für mehr',
+            subscribe: '🔔 Abonniere für tägliche Updates'
+          },
+          es: {
+            comment: '💬 Comenta "SÍ" para obtener la guía completa',
+            save: '💾 ¡Guarda esto para más tarde!',
+            follow: '👉 Síguenos para más consejos',
+            share: '📤 Comparte con tus amigos',
+            visit: '🌐 Visita nuestro sitio web para más',
+            subscribe: '🔔 Suscríbete para actualizaciones diarias'
+          },
+          fr: {
+            comment: '💬 Commente "OUI" pour obtenir le guide complet',
+            save: '💾 Enregistrez ceci pour plus tard!',
+            follow: '👉 Suivez pour plus de conseils',
+            share: '📤 Partagez avec vos amis',
+            visit: '🌐 Visitez notre site web pour plus',
+            subscribe: '🔔 Abonnez-vous pour les mises à jour quotidiennes'
+          }
+        };
+
+        if (type === 'custom') {
+          return customMessage || messages[language]?.follow || messages.en.follow;
+        }
+
+        return messages[language]?.[type] || messages.en[type] || messages.en.follow;
+      }
+
       // Generate carousel HTML template
       function generateSlideHtml(text, slideNum, totalSlides, options) {
         const { template, primaryColor, bgColor, textColor, fontSize, showSlideNumbers } = options;
@@ -763,6 +935,18 @@ export function generateCarouselPage({ apiBase }: GenerateCarouselPageProps): st
           textStyle = 'color: #ffffff;';
         } else if (template === 'dark') {
           bgStyle = 'background: #1f2937;';
+          textStyle = 'color: #ffffff;';
+        } else if (template === 'modern') {
+          bgStyle = 'background: linear-gradient(135deg, #667eea 0%, #f093fb 100%);';
+          textStyle = 'color: #ffffff;';
+        } else if (template === 'playful') {
+          bgStyle = 'background: linear-gradient(135deg, #ffa500 0%, #ff1493 100%);';
+          textStyle = 'color: #ffffff;';
+        } else if (template === 'professional') {
+          bgStyle = 'background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);';
+          textStyle = 'color: #ffffff;';
+        } else if (template === 'vibrant') {
+          bgStyle = 'background: linear-gradient(135deg, #ff6b6b 0%, #4ecdc4 100%);';
           textStyle = 'color: #ffffff;';
         }
 
@@ -971,10 +1155,21 @@ export function generateCarouselPage({ apiBase }: GenerateCarouselPageProps): st
           bgColor: form.bgColor.value,
           textColor: form.textColor.value,
           fontSize: form.fontSize.value,
-          showSlideNumbers: form.showSlideNumbers.checked
+          showSlideNumbers: form.showSlideNumbers.checked,
+          language: form.language.value
         };
 
-        showStatus('Generating ' + slides.length + ' slides...', 'loading');
+        // Add CTA slide if enabled
+        const enableCTA = form.enableCTA.checked;
+        if (enableCTA) {
+          const ctaType = form.ctaType.value;
+          const customMessage = form.ctaCustomMessage.value;
+          const ctaMessage = getCTAMessage(ctaType, customMessage, options.language);
+          slides.push(ctaMessage);
+        }
+
+        const totalSlides = slides.length;
+        showStatus('Generating ' + totalSlides + ' slides...', 'loading');
 
         try {
           const generatedUrls = [];
@@ -1098,6 +1293,9 @@ export function generateCarouselPage({ apiBase }: GenerateCarouselPageProps): st
           btnLoading.classList.add('hidden');
         }
       });
+
+      // Add CTA type change listener
+      document.getElementById('ctaType').addEventListener('change', toggleCustomCTAMessage);
 
       // Initial load
       loadRecentCarousels();
