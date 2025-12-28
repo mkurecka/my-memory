@@ -16,6 +16,7 @@ import proxyRoutes from './routes/proxy';
 import searchRoutes from './routes/search';
 import dashboardRoutes from './routes/dashboard';
 import mobileRoutes from './routes/mobile';
+import claudeSessionsRoutes from './routes/claude-sessions';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -39,7 +40,7 @@ app.use('*', cors({
 app.get('/', (c) => {
   return c.json({
     success: true,
-    message: 'Universal Text Processor API',
+    message: 'My Memory 🧠 API',
     version: c.env.API_VERSION || 'v1',
     environment: c.env.ENVIRONMENT || 'development',
     timestamp: Date.now(),
@@ -52,6 +53,101 @@ app.get('/health', (c) => {
     status: 'healthy',
     timestamp: Date.now(),
   });
+});
+
+// App-wide settings (stored in KV, no auth required for personal dashboard)
+const APP_SETTINGS_KEY = 'app:settings';
+
+app.get('/api/app-settings', async (c) => {
+  try {
+    const settingsJson = await c.env.CACHE.get(APP_SETTINGS_KEY);
+    const settings = settingsJson ? JSON.parse(settingsJson) : {};
+
+    // Mask API key if present
+    if (settings.openrouterApiKey) {
+      settings.openrouterApiKey = '••••••••' + settings.openrouterApiKey.slice(-4);
+    }
+
+    return c.json({
+      success: true,
+      settings,
+    });
+  } catch (error: any) {
+    console.error('Get app settings error:', error);
+    return c.json({
+      success: false,
+      error: error.message || 'Failed to get settings',
+    }, 500);
+  }
+});
+
+app.put('/api/app-settings', async (c) => {
+  try {
+    const newSettings = await c.req.json();
+
+    // Get current settings
+    const currentJson = await c.env.CACHE.get(APP_SETTINGS_KEY);
+    const current = currentJson ? JSON.parse(currentJson) : {};
+
+    // Merge settings - now using arrays for model selections
+    const merged = {
+      ...current,
+      // New array-based model settings
+      textModels: newSettings.textModels ?? current.textModels ?? [],
+      imageModels: newSettings.imageModels ?? current.imageModels ?? [],
+      videoModels: newSettings.videoModels ?? current.videoModels ?? [],
+      imageGenModels: newSettings.imageGenModels ?? current.imageGenModels ?? [],
+    };
+
+    // Only update API key if explicitly provided (not masked)
+    if (newSettings.openrouterApiKey && !newSettings.openrouterApiKey.startsWith('••')) {
+      merged.openrouterApiKey = newSettings.openrouterApiKey;
+    }
+
+    await c.env.CACHE.put(APP_SETTINGS_KEY, JSON.stringify(merged));
+
+    // Return masked version
+    const response = { ...merged };
+    if (response.openrouterApiKey) {
+      response.openrouterApiKey = '••••••••' + response.openrouterApiKey.slice(-4);
+    }
+
+    return c.json({
+      success: true,
+      message: 'Settings saved',
+      settings: response,
+    });
+  } catch (error: any) {
+    console.error('Save app settings error:', error);
+    return c.json({
+      success: false,
+      error: error.message || 'Failed to save settings',
+    }, 500);
+  }
+});
+
+// API endpoint for extension to get enabled models
+app.get('/api/enabled-models', async (c) => {
+  try {
+    const settingsJson = await c.env.CACHE.get(APP_SETTINGS_KEY);
+    const settings = settingsJson ? JSON.parse(settingsJson) : {};
+
+    return c.json({
+      success: true,
+      models: {
+        text: settings.textModels || [],
+        image: settings.imageModels || [],
+        video: settings.videoModels || [],
+        imageGen: settings.imageGenModels || [],
+      },
+    });
+  } catch (error: any) {
+    console.error('Get enabled models error:', error);
+    return c.json({
+      success: false,
+      error: error.message || 'Failed to get models',
+    }, 500);
+  }
 });
 
 // Dashboard UI (modular template system)
@@ -74,6 +170,9 @@ app.route('/api/webhook', webhookRoutes);
 
 // Mobile API routes (for iOS Shortcuts / automation)
 app.route('/api/mobile', mobileRoutes);
+
+// Claude Code sessions API
+app.route('/api/claude', claudeSessionsRoutes);
 
 // 404 handler
 app.notFound((c) => {

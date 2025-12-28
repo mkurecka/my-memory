@@ -470,7 +470,7 @@ export function webhooksPage({ count, apiBase }: WebhooksPageProps): string {
   `;
 
   return baseLayout({
-    title: 'Webhooks - Universal Text Processor',
+    title: 'Webhooks - My Memory 🧠',
     content,
     styles,
     scripts

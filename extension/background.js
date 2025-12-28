@@ -47,7 +47,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     const selectedText = info.selectionText;
 
     if (!selectedText || selectedText.trim().length === 0) {
-      console.warn("[Universal Text Processor] No text selected");
+      console.warn("[My Memory] No text selected");
       return;
     }
 
@@ -55,9 +55,9 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       await chrome.tabs.sendMessage(tab.id, {
         action: "openProcessModal"
       });
-      console.log("[Universal Text Processor] Opened modal from context menu");
+      console.log("[My Memory] Opened modal from context menu");
     } catch (error) {
-      console.log("[Universal Text Processor] Content script not available, trying to inject...");
+      console.log("[My Memory] Content script not available, trying to inject...");
       // Try to inject content script if not loaded
       try {
         await chrome.scripting.executeScript({
@@ -70,7 +70,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
           files: ['styles.css']
         });
 
-        console.log("[Universal Text Processor] Content script injected, retrying...");
+        console.log("[My Memory] Content script injected, retrying...");
 
         // Small delay to let script initialize
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -80,7 +80,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
           action: "openProcessModal"
         });
       } catch (injectError) {
-        console.error("[Universal Text Processor] Cannot inject on this page:", injectError);
+        console.error("[My Memory] Cannot inject on this page:", injectError);
         alert("Cannot use extension on this page. Try a regular website or the included test.html file.");
       }
     }
@@ -199,7 +199,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           fullPrompt += detailInstructions[actionParams.detailLevel] || '';
         }
 
-        console.log("[Universal Text Processor] Processing:", {
+        console.log("[My Memory] Processing:", {
           mode,
           account,
           language,
@@ -314,7 +314,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         };
 
         // Call backend proxy (uses API key stored on backend)
-        const backendUrl = settingsManager.settings?.backend?.baseUrl || 'https://text-processor-api.kureckamichal.workers.dev';
+        const backendUrl = settingsManager.settings?.backend?.baseUrl || 'https://my-memory.kureckamichal.workers.dev';
         const proxyEndpoint = `${backendUrl}/api/proxy/openrouter`;
 
         console.log("[Extension] Using backend proxy:", proxyEndpoint);
@@ -574,12 +574,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.action === "getAllPosts") {
-    sendResponse({ error: 'View data on dashboard: https://text-processor-api.kureckamichal.workers.dev/dashboard' });
+    sendResponse({ error: 'View data on dashboard: https://my-memory.kureckamichal.workers.dev/dashboard' });
     return true;
   }
 
   if (request.action === "getStats") {
-    sendResponse({ error: 'View stats on dashboard: https://text-processor-api.kureckamichal.workers.dev/dashboard' });
+    sendResponse({ error: 'View stats on dashboard: https://my-memory.kureckamichal.workers.dev/dashboard' });
     return true;
   }
 
@@ -630,24 +630,63 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     (async () => {
       try {
         const videoData = request.data;
+        const backendUrl = settingsManager.settings?.backend?.baseUrl || 'https://my-memory.kureckamichal.workers.dev';
 
-        // Send directly to backend via webhook
-        await sendWebhookNotification('onSaveYouTubeVideo', {
-          data: {
-            videoId: videoData.videoId,
-            url: videoData.url,
-            title: videoData.title,
-            channel: videoData.channel,
-            description: videoData.description,
-            transcript: videoData.transcript,
-            metadata: videoData.metadata
+        // Fetch enriched video data from backend (stats, thumbnails, etc.)
+        let enrichedData = null;
+        try {
+          const apiResponse = await fetch(`${backendUrl}/api/proxy/youtube/transcript/${videoData.videoId}`);
+          if (apiResponse.ok) {
+            const apiResult = await apiResponse.json();
+            if (apiResult.success) {
+              enrichedData = apiResult.data;
+              console.log('[Extension] Fetched YouTube stats:', enrichedData.statistics);
+            }
           }
+        } catch (apiError) {
+          console.log('[Extension] Could not fetch YouTube API data:', apiError.message);
+        }
+
+        // Merge client-side data with API data (prefer client-side transcript if available)
+        const mergedData = {
+          videoId: videoData.videoId,
+          url: enrichedData?.url || videoData.url,
+          title: enrichedData?.title || videoData.title,
+          description: enrichedData?.description || videoData.description,
+          channel: enrichedData?.channel || videoData.channel,
+          publishedAt: enrichedData?.publishedAt || null,
+          duration: enrichedData?.duration || null,
+          statistics: enrichedData?.statistics || null,
+          thumbnails: enrichedData?.thumbnails || null,
+          tags: enrichedData?.tags || [],
+          definition: enrichedData?.definition || null,
+          hasCaptions: enrichedData?.hasCaptions || false,
+          // Prefer client-side transcript (extracted from open panel) over API
+          transcript: (videoData.transcript?.available && videoData.transcript?.text)
+            ? videoData.transcript
+            : enrichedData?.transcript || { available: false, text: null, source: 'none' },
+          metadata: {
+            ...videoData.metadata,
+            capturedAt: new Date().toISOString(),
+            source: 'extension'
+          }
+        };
+
+        // Send enriched data to backend via webhook
+        await sendWebhookNotification('onSaveYouTubeVideo', {
+          data: mergedData
         });
 
-        console.log('[Extension] Video saved to backend:', videoData.videoId);
+        console.log('[Extension] Video saved to backend:', videoData.videoId, {
+          hasTranscript: mergedData.transcript?.available,
+          transcriptWords: mergedData.transcript?.wordCount || 0,
+          views: mergedData.statistics?.viewsFormatted || 'N/A'
+        });
+
         sendResponse({
           success: true,
-          message: 'Video saved to backend'
+          message: 'Video saved to backend',
+          stats: mergedData.statistics
         });
       } catch (error) {
         console.error('[Extension] Error saving video:', error);
@@ -780,7 +819,7 @@ Return ONLY the caption text, nothing else.`;
 
             // Use backend proxy instead of direct OpenRouter call
             const backendUrl = settingsManager.settings?.backend?.baseUrl ||
-              'https://text-processor-api.kureckamichal.workers.dev';
+              'https://my-memory.kureckamichal.workers.dev';
 
             const captionResponse = await fetch(`${backendUrl}/api/proxy/openrouter`, {
               method: 'POST',
@@ -845,7 +884,7 @@ Return ONLY the caption text, nothing else.`;
         const { text } = request;
 
         const backendUrl = settingsManager.settings?.backend?.baseUrl ||
-          'https://text-processor-api.kureckamichal.workers.dev';
+          'https://my-memory.kureckamichal.workers.dev';
 
         const response = await fetch(`${backendUrl}/api/proxy/openrouter`, {
           method: 'POST',
@@ -899,7 +938,7 @@ Generate a prompt that describes a compelling visual representation of this cont
         console.log('[AI Image] Generating image:', { model, prompt, style, aspectRatio });
 
         const backendUrl = settingsManager.settings?.backend?.baseUrl ||
-          'https://text-processor-api.kureckamichal.workers.dev';
+          'https://my-memory.kureckamichal.workers.dev';
 
         // Call backend image generation proxy
         const response = await fetch(`${backendUrl}/api/proxy/image`, {

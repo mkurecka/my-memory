@@ -397,23 +397,31 @@ export function generateImagePage({ apiBase, userId }: GenerateImagePageProps): 
       const USER_ID = '${userId}';
       let generatedImageUrl = '';
 
-      // Load available models
+      // Load enabled models from settings
       async function loadModels() {
         const select = document.getElementById('model');
         try {
-          const response = await fetch(API_BASE + '/api/proxy/image-models?refresh=false');
+          // Fetch enabled models from settings
+          const response = await fetch(API_BASE + '/api/enabled-models');
           const data = await response.json();
 
-          if (data.success && data.data) {
-            select.innerHTML = data.data.map(model =>
-              '<option value="' + model.id + '">' + model.name + '</option>'
+          if (data.success && data.models && data.models.imageGen && data.models.imageGen.length > 0) {
+            select.innerHTML = data.models.imageGen.map(modelId =>
+              '<option value="' + modelId + '">' + modelId + '</option>'
             ).join('');
           } else {
-            select.innerHTML = '<option value="google/gemini-2.5-flash-image">Gemini 2.5 Flash Image</option>';
+            // No models configured - show message with link to settings
+            select.innerHTML = '<option value="">No models enabled</option>';
+            select.insertAdjacentHTML('afterend',
+              '<div style="font-size: 11px; color: #e74c3c; margin-top: 5px;">' +
+              '⚠️ No image generation models enabled. ' +
+              '<a href="/dashboard/settings" style="color: var(--primary);">Configure in Settings</a>' +
+              '</div>'
+            );
           }
         } catch (error) {
           console.error('Failed to load models:', error);
-          select.innerHTML = '<option value="google/gemini-2.5-flash-image">Gemini 2.5 Flash Image</option>';
+          select.innerHTML = '<option value="google/gemini-2.5-flash-image">Gemini 2.5 Flash Image (fallback)</option>';
         }
       }
 
@@ -502,12 +510,12 @@ export function generateImagePage({ apiBase, userId }: GenerateImagePageProps): 
 
           const result = await response.json();
 
-          if (result.success && result.imageUrl) {
-            generatedImageUrl = result.imageUrl;
-            previewContainer.innerHTML = '<img src="' + result.imageUrl + '" alt="Generated image" />';
+          if (result.success && result.url) {
+            generatedImageUrl = result.url;
+            previewContainer.innerHTML = '<img src="' + result.url + '" alt="Generated image" />';
 
             document.getElementById('image-actions').classList.remove('hidden');
-            document.getElementById('download-btn').href = result.imageUrl;
+            document.getElementById('download-btn').href = result.url;
 
             showStatus('Image generated successfully!', 'success');
 
@@ -534,7 +542,7 @@ export function generateImagePage({ apiBase, userId }: GenerateImagePageProps): 
   `;
 
   return baseLayout({
-    title: 'Generate Image - Universal Text Processor',
+    title: 'Generate Image - My Memory 🧠',
     content,
     styles,
     scripts

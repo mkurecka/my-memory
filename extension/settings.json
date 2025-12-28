@@ -113,7 +113,7 @@
   },
   "api": {
     "provider": "backend_proxy",
-    "endpoint": "https://text-processor-api.kureckamichal.workers.dev/api/proxy/openrouter",
+    "endpoint": "https://my-memory.kureckamichal.workers.dev/api/proxy/openrouter",
     "model": "openai/gpt-4o-mini"
   },
   "ui": {
@@ -182,7 +182,7 @@
   ],
   "webhook": {
     "enabled": true,
-    "url": "https://text-processor-api.kureckamichal.workers.dev/api/v1/webhook",
+    "url": "https://my-memory.kureckamichal.workers.dev/api/v1/webhook",
     "events": {
       "onSaveTweet": true,
       "onSaveYouTubeVideo": true,
@@ -195,7 +195,7 @@
     }
   },
   "backend": {
-    "baseUrl": "https://text-processor-api.kureckamichal.workers.dev",
+    "baseUrl": "https://my-memory.kureckamichal.workers.dev",
     "apiVersion": "v1"
   },
   "airtable": {
@@ -220,7 +220,7 @@
   "visualContent": {
     "enabled": true,
     "htmlToImageWorker": {
-      "endpoint": "https://text-processor-api.kureckamichal.workers.dev/api/proxy/html-to-image",
+      "endpoint": "https://my-memory.kureckamichal.workers.dev/api/proxy/html-to-image",
       "apiKey": ""
     },
     "imageTypes": {

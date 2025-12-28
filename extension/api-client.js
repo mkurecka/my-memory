@@ -1,5 +1,5 @@
 /**
- * API Client for Universal Text Processor Backend
+ * API Client for My Memory Backend
  * Handles all communication with the Cloudflare Workers backend
  */
 
@@ -13,7 +13,7 @@ class APIClient {
   async init() {
     // Load settings to get backend configuration
     const settings = await this.loadSettings();
-    this.baseUrl = settings?.backend?.baseUrl || 'https://text-processor-api.kureckamichal.workers.dev';
+    this.baseUrl = settings?.backend?.baseUrl || 'https://my-memory.kureckamichal.workers.dev';
     this.apiVersion = settings?.backend?.apiVersion || 'v1';
 
     // Load API key from chrome.storage

@@ -251,20 +251,46 @@ router.post('/save', async (c) => {
     const userId = c.req.header('X-User-ID') || DEFAULT_MOBILE_USER;
     await ensureUserExists(c, userId);
 
-    // Detect content type from input
-    const lowerInput = input.toLowerCase();
+    // Check if input looks like HTML (shortcut might send page content instead of URL)
+    // Try to extract a clean URL from it
+    let cleanUrl: string | null = null;
+    if (input.startsWith('<!DOCTYPE') || input.startsWith('<html')) {
+      // Extract Twitter/X URL from HTML
+      const twitterUrlMatch = input.match(/https?:\/\/(?:x\.com|twitter\.com)\/[^\s"'<>]+\/status\/\d+/i);
+      if (twitterUrlMatch) {
+        cleanUrl = twitterUrlMatch[0];
+      }
+      // Extract YouTube URL from HTML
+      const youtubeUrlMatch = input.match(/https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)[^\s"'<>]+/i);
+      if (youtubeUrlMatch) {
+        cleanUrl = youtubeUrlMatch[0];
+      }
+    }
 
-    // Twitter/X detection
-    if (lowerInput.includes('x.com/') || lowerInput.includes('twitter.com/')) {
-      return await saveTweetFromUrl(c, userId, input, additionalContent);
+    // Use extracted URL if found, otherwise use original input
+    const processInput = cleanUrl || input;
+    const lowerInput = processInput.toLowerCase();
+
+    // Twitter/X detection - must be a proper URL, not just contain the domain
+    const isTwitterUrl = /^https?:\/\/(?:x\.com|twitter\.com)\/\w+\/status\/\d+/i.test(processInput) ||
+                         /(?:x\.com|twitter\.com)\/\w+\/status\/\d+/i.test(processInput);
+    if (isTwitterUrl) {
+      return await saveTweetFromUrl(c, userId, processInput, additionalContent);
     }
 
     // YouTube detection
     if (lowerInput.includes('youtube.com/') || lowerInput.includes('youtu.be/')) {
-      return await saveYouTubeFromUrl(c, userId, input);
+      return await saveYouTubeFromUrl(c, userId, processInput);
     }
 
-    // Default: save as text/memory
+    // Default: save as text/memory (but don't save raw HTML)
+    if (input.startsWith('<!DOCTYPE') || input.startsWith('<html')) {
+      return c.json({
+        success: false,
+        error: 'Received HTML instead of URL. Please configure your shortcut to share the URL, not the page content.'
+      }, 400);
+    }
+
     return await saveAsMemory(c, userId, input);
 
   } catch (error) {

@@ -1,7 +1,7 @@
 {
-  "name": "universal-text-processor",
+  "name": "my-memory",
   "version": "2.2.0",
-  "description": "Universal Text Processor - Chrome Extension + Cloudflare Workers Backend",
+  "description": "My Memory - Chrome Extension + Cloudflare Workers Backend",
   "scripts": {
     "test": "npm run test:extension && npm run test:backend",
     "test:extension": "npm run test:templates && npm run test:integration && npm run test:twitter",

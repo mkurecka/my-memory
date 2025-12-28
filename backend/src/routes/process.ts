@@ -66,7 +66,7 @@ process.post('/text', authMiddleware, async (c) => {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${c.env.OPENROUTER_API_KEY}`,
         'HTTP-Referer': c.env.APP_URL || 'https://text-processor.app',
-        'X-Title': 'Universal Text Processor',
+        'X-Title': 'My Memory',
       },
       body: JSON.stringify({
         model,
@@ -186,7 +186,7 @@ process.post('/image', authMiddleware, async (c) => {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${c.env.OPENROUTER_API_KEY}`,
         'HTTP-Referer': c.env.APP_URL || 'https://text-processor.app',
-        'X-Title': 'Universal Text Processor',
+        'X-Title': 'My Memory',
       },
       body: JSON.stringify({
         model,

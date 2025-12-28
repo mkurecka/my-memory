@@ -99,8 +99,8 @@ router.post('/', async (c) => {
     }
 
     // Fallback to environment variable
-    if (!forwardUrl && c.env.RAILWAY_WEBHOOK_URL) {
-      forwardUrl = c.env.RAILWAY_WEBHOOK_URL;
+    if (!forwardUrl && c.env.N8N_WEBHOOK_URL) {
+      forwardUrl = c.env.N8N_WEBHOOK_URL;
     }
 
     // Forward webhook if URL is configured

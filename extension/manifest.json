@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Universal Text Processor",
-  "version": "2.2.0",
-  "description": "Capture and process text from any website with AI-powered actions, memory storage, and webhook integration.",
+  "name": "My Memory",
+  "version": "3.0.0",
+  "description": "Save and organize content from anywhere - tweets, videos, text, and more with AI-powered processing.",
   "permissions": ["activeTab", "scripting", "storage", "contextMenus"],
   "host_permissions": [
     "<all_urls>"

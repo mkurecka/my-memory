@@ -53,6 +53,17 @@ export function tweetsPage({ count, apiBase }: TweetsPageProps): string {
       <!-- Pagination -->
       <div id="pagination" class="pagination"></div>
     </div>
+
+    <!-- Tweet Detail Modal -->
+    <div id="tweet-modal" class="modal" style="display: none;">
+      <div class="modal-overlay" onclick="closeModal()"></div>
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+        <div id="modal-body">
+          <div class="loading-container"><div class="loading"></div></div>
+        </div>
+      </div>
+    </div>
   `;
 
   const styles = `
@@ -267,6 +278,220 @@ export function tweetsPage({ count, apiBase }: TweetsPageProps): string {
         padding: 3rem;
         color: var(--text-secondary);
       }
+
+      .tweet-card {
+        cursor: pointer;
+      }
+
+      /* Modal Styles */
+      .modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+      }
+
+      .modal-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(4px);
+      }
+
+      .modal-content {
+        position: relative;
+        background: var(--surface);
+        border-radius: 16px;
+        max-width: 700px;
+        width: 100%;
+        max-height: 90vh;
+        overflow-y: auto;
+        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+      }
+
+      .modal-close {
+        position: sticky;
+        top: 1rem;
+        right: 1rem;
+        float: right;
+        background: var(--background);
+        border: none;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        font-size: 1.5rem;
+        cursor: pointer;
+        z-index: 10;
+        margin: 1rem;
+      }
+
+      .modal-close:hover {
+        background: #fee2e2;
+      }
+
+      #modal-body {
+        padding: 1.5rem;
+      }
+
+      .detail-author {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1.25rem;
+      }
+
+      .detail-avatar {
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        background: var(--background);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2rem;
+        overflow: hidden;
+      }
+
+      .detail-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .detail-author-info {
+        flex: 1;
+      }
+
+      .detail-author-name {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+
+      .detail-author-handle {
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+      }
+
+      .detail-author-handle a {
+        color: #1da1f2;
+        text-decoration: none;
+      }
+
+      .detail-author-handle a:hover {
+        text-decoration: underline;
+      }
+
+      .detail-text {
+        font-size: 1.15rem;
+        color: var(--text-primary);
+        line-height: 1.7;
+        white-space: pre-wrap;
+        word-break: break-word;
+        margin-bottom: 1.25rem;
+      }
+
+      .detail-media {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 0.75rem;
+        margin-bottom: 1.25rem;
+      }
+
+      .detail-media img {
+        width: 100%;
+        border-radius: 12px;
+        max-height: 400px;
+        object-fit: cover;
+        cursor: pointer;
+      }
+
+      .detail-media img:hover {
+        opacity: 0.9;
+      }
+
+      .detail-stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        padding: 1rem 0;
+        border-top: 1px solid var(--border);
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 1.25rem;
+      }
+
+      .stat-item {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+      }
+
+      .stat-item strong {
+        color: var(--text-primary);
+      }
+
+      .detail-actions {
+        display: flex;
+        gap: 0.75rem;
+        margin-bottom: 1.5rem;
+      }
+
+      .detail-actions a, .detail-actions button {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.625rem 1rem;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        text-decoration: none;
+        cursor: pointer;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text-primary);
+        transition: all 0.2s;
+      }
+
+      .detail-actions a:hover, .detail-actions button:hover {
+        background: var(--background);
+      }
+
+      .detail-actions .primary {
+        background: #1da1f2;
+        color: white;
+        border-color: #1da1f2;
+      }
+
+      .detail-actions .primary:hover {
+        background: #1991db;
+      }
+
+      .detail-section {
+        margin-top: 1.5rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid var(--border);
+      }
+
+      .detail-section-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
     </style>
   `;
 
@@ -312,14 +537,14 @@ export function tweetsPage({ count, apiBase }: TweetsPageProps): string {
               const images = media.images || [];
 
               return \`
-                <div class="tweet-card" data-id="\${item.id}">
+                <div class="tweet-card" data-id="\${item.id}" onclick="openModal(\${JSON.stringify(item).replace(/"/g, '&quot;')})">
                   <div class="tweet-author">
                     <div class="tweet-avatar">👤</div>
                     <div class="tweet-author-info">
                       <div class="tweet-author-name">\${escapeHtml(authorName)}</div>
                       \${authorHandle ? \`<div class="tweet-author-handle">@\${escapeHtml(authorHandle)}</div>\` : ''}
                     </div>
-                    <button class="delete-btn" onclick="deletePost('\${item.id}', this)" title="Delete">🗑️</button>
+                    <button class="delete-btn" onclick="event.stopPropagation(); deletePost('\${item.id}', this)" title="Delete">🗑️</button>
                   </div>
                   <div class="tweet-text">\${escapeHtml(item.original_text || '')}</div>
                   \${images.length > 0 ? \`
@@ -329,7 +554,7 @@ export function tweetsPage({ count, apiBase }: TweetsPageProps): string {
                   \` : ''}
                   <div class="tweet-meta">
                     <span class="tweet-meta-item">📅 \${dateStr}</span>
-                    \${tweetUrl ? \`<a href="\${tweetUrl}" target="_blank" class="tweet-link tweet-meta-item">🔗 View on X</a>\` : ''}
+                    \${tweetUrl ? \`<a href="\${tweetUrl}" target="_blank" class="tweet-link tweet-meta-item" onclick="event.stopPropagation()">🔗 View on X</a>\` : ''}
                   </div>
                 </div>
               \`;
@@ -431,6 +656,168 @@ export function tweetsPage({ count, apiBase }: TweetsPageProps): string {
         }
       }
 
+      // Modal functions
+      function openModal(item) {
+        const modal = document.getElementById('tweet-modal');
+        const modalBody = document.getElementById('modal-body');
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+
+        const context = item.context_json ? JSON.parse(item.context_json) : {};
+        const tweetUrl = context.url || '';
+        const author = context.author || {};
+        const authorName = author.displayName || author.name || 'Unknown';
+        const authorHandle = author.username || author.handle || '';
+        const authorAvatar = author.avatarUrl || author.avatar || '';
+        const authorUrl = authorHandle ? 'https://x.com/' + authorHandle : '';
+        const media = context.media || {};
+        const images = media.images || [];
+        const videos = media.videos || [];
+        const stats = context.stats || context.statistics || {};
+        const postedAt = context.postedAt || context.timestamp ? new Date(context.postedAt || context.timestamp).toLocaleString() : '';
+        const savedAt = new Date(item.created_at).toLocaleDateString();
+        const text = item.original_text || context.text || '';
+
+        modalBody.innerHTML = \`
+          <div class="detail-author">
+            <div class="detail-avatar">
+              \${authorAvatar ? '<img src="' + authorAvatar + '" alt="' + escapeHtml(authorName) + '" />' : '👤'}
+            </div>
+            <div class="detail-author-info">
+              <div class="detail-author-name">\${escapeHtml(authorName)}</div>
+              \${authorHandle ? \`
+                <div class="detail-author-handle">
+                  <a href="\${authorUrl}" target="_blank">@\${escapeHtml(authorHandle)}</a>
+                </div>
+              \` : ''}
+            </div>
+          </div>
+
+          <div class="detail-text">\${escapeHtml(text)}</div>
+
+          \${images.length > 0 ? \`
+            <div class="detail-media">
+              \${images.map(img => \`<img src="\${img}" alt="Tweet media" loading="lazy" onclick="window.open('\${img}', '_blank')" />\`).join('')}
+            </div>
+          \` : ''}
+
+          \${videos.length > 0 ? \`
+            <div style="background:var(--background);padding:1rem;border-radius:8px;margin-bottom:1.25rem;">
+              <span>🎬 \${videos.length} video(s) attached</span>
+            </div>
+          \` : ''}
+
+          <div class="detail-stats">
+            \${stats.likes !== undefined ? \`<span class="stat-item">❤️ <strong>\${formatNumber(stats.likes)}</strong> likes</span>\` : ''}
+            \${stats.retweets !== undefined ? \`<span class="stat-item">🔁 <strong>\${formatNumber(stats.retweets)}</strong> retweets</span>\` : ''}
+            \${stats.replies !== undefined ? \`<span class="stat-item">💬 <strong>\${formatNumber(stats.replies)}</strong> replies</span>\` : ''}
+            \${stats.views !== undefined ? \`<span class="stat-item">👁️ <strong>\${formatNumber(stats.views)}</strong> views</span>\` : ''}
+            \${postedAt ? \`<span class="stat-item">📅 \${postedAt}</span>\` : ''}
+          </div>
+
+          <div class="detail-actions">
+            \${tweetUrl ? '<a href="' + tweetUrl + '" target="_blank" class="primary">🐦 View on X</a>' : ''}
+            <button onclick="copyToClipboard(decodeURIComponent('\${encodeURIComponent(text)}'))">📋 Copy Text</button>
+          </div>
+
+          <div class="detail-section">
+            <h3 class="detail-section-title">🤖 Create Task from Tweet</h3>
+            <form id="task-form" onsubmit="submitTask(event, '\${item.id}', 'tweet')">
+              <textarea id="task-input" placeholder="Describe what you want to do with this tweet..." rows="3" style="width:100%;padding:0.75rem;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;resize:vertical;margin-bottom:0.75rem;"></textarea>
+              <div style="display:flex;gap:0.75rem;align-items:center;">
+                <button type="submit" style="background:var(--primary);color:white;border:none;padding:0.625rem 1.25rem;border-radius:8px;font-weight:500;cursor:pointer;">📤 Send Task</button>
+                <span id="task-status" style="font-size:0.875rem;color:var(--text-secondary);"></span>
+              </div>
+            </form>
+          </div>
+
+          <div style="margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--border);font-size:0.8rem;color:var(--text-secondary);">
+            <span>💾 Saved: \${savedAt}</span>
+            <span style="margin-left:1rem;">🆔 ID: \${item.id}</span>
+          </div>
+        \`;
+
+        window.currentItem = item;
+      }
+
+      function closeModal() {
+        const modal = document.getElementById('tweet-modal');
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+        window.currentItem = null;
+      }
+
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeModal();
+      });
+
+      function formatNumber(num) {
+        if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+        if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+        return num.toString();
+      }
+
+      function copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(() => {
+          alert('Copied to clipboard!');
+        });
+      }
+
+      async function submitTask(event, itemId, itemType) {
+        event.preventDefault();
+        const input = document.getElementById('task-input');
+        const status = document.getElementById('task-status');
+        const task = input.value.trim();
+
+        if (!task) {
+          status.textContent = 'Please enter a task description';
+          status.style.color = '#ef4444';
+          return;
+        }
+
+        status.textContent = 'Sending...';
+        status.style.color = 'var(--text-secondary)';
+
+        try {
+          const item = window.currentItem;
+          const context = item.context_json ? JSON.parse(item.context_json) : {};
+
+          const payload = {
+            event: 'memory_task',
+            data: {
+              task: task,
+              itemId: itemId,
+              itemType: itemType,
+              text: item.original_text || context.text || '',
+              url: context.url || '',
+              author: context.author || {},
+              context: context,
+              createdAt: new Date().toISOString()
+            }
+          };
+
+          const response = await fetch(API_BASE + '/api/v1/webhook', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            status.textContent = '✓ Task sent successfully!';
+            status.style.color = '#22c55e';
+            input.value = '';
+          } else {
+            status.textContent = 'Failed: ' + (result.error || 'Unknown error');
+            status.style.color = '#ef4444';
+          }
+        } catch (error) {
+          status.textContent = 'Error: ' + error.message;
+          status.style.color = '#ef4444';
+        }
+      }
+
       // Initial load
       if (${count} > 0) {
         loadTweets();
@@ -439,7 +826,7 @@ export function tweetsPage({ count, apiBase }: TweetsPageProps): string {
   `;
 
   return baseLayout({
-    title: 'Tweets - Universal Text Processor',
+    title: 'Tweets - My Memory 🧠',
     content,
     styles,
     scripts

@@ -1,5 +1,5 @@
 /**
- * API Response Types for Universal Text Processor Extension
+ * API Response Types for My Memory Extension
  * These types help catch errors like accessing wrong nested properties
  */
 

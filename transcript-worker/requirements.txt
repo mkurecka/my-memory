@@ -1,0 +1,2 @@
+# Cloudflare Python Workers use pyodide runtime
+# These are for local development reference only

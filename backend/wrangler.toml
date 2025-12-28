@@ -1,5 +1,5 @@
 #:schema node_modules/wrangler/config-schema.json
-name = "text-processor-api"
+name = "my-memory"
 main = "src/index.ts"
 compatibility_date = "2025-01-20"
 compatibility_flags = ["nodejs_compat"]
@@ -27,12 +27,12 @@ bucket_name = "text-processor-storage"
 ENVIRONMENT = "development"
 JWT_SECRET = "change-this-in-production"
 API_VERSION = "v1"
-APP_URL = "https://text-processor.app"
+APP_URL = "https://my-memory.kureckamichal.workers.dev"
 # Note: AIRTABLE_API_KEY and AIRTABLE_BASE_ID are set as secrets via wrangler secret put
 AIRTABLE_PROFILES_TABLE = "Brand Profiles" # Table name for brand profiles
 AIRTABLE_WEBSITES_TABLE = "Content Generations" # Table name for content generations
 HTML_TO_IMAGE_WORKER_URL = "https://html-to-image-worker.kureckamichal.workers.dev/render"
-RAILWAY_WEBHOOK_URL = "https://primary-production-3ce13.up.railway.app/api/v1/webhook"
+N8N_WEBHOOK_URL = "https://n8n-mkurecka.up.railway.app/webhook/post-scraper"
 # Note: OPENROUTER_API_KEY and HTML_TO_IMAGE_WORKER_API_KEY are set as secrets via Cloudflare Dashboard
 # Do not add them here as environment variables or they will override the secrets
 
@@ -40,6 +40,12 @@ RAILWAY_WEBHOOK_URL = "https://primary-production-3ce13.up.railway.app/api/v1/we
 [[services]]
 binding = "HTML_TO_IMAGE_SERVICE"
 service = "html-to-image-worker"
+
+[[services]]
+binding = "TRANSCRIPT_SERVICE"
+service = "youtube-transcript-worker"
+
+# Custom Domain: memory.michalkurecka.cz (configured in Cloudflare Dashboard)
 
 # Observability
 [observability]

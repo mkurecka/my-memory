@@ -911,7 +911,7 @@ router.get('/vision-models', async (c) => {
  */
 router.post('/generate-carousel-content', async (c) => {
   try {
-    const { topic, slideCount, style } = await c.req.json();
+    const { topic, slideCount, style, language, ctaEnabled, ctaType, ctaMessage } = await c.req.json();
 
     if (!topic) {
       return c.json({
@@ -930,6 +930,9 @@ router.post('/generate-carousel-content', async (c) => {
 
     const numSlides = Math.min(Math.max(slideCount || 5, 2), 10);
     const contentStyle = style || 'educational';
+    const targetLanguage = language || 'cs';
+    const hasCTA = ctaEnabled === true;
+    const ctaTypeVal = ctaType || 'follow';
 
     const styleGuides: Record<string, string> = {
       educational: 'informative, clear explanations, step-by-step format',
@@ -939,24 +942,104 @@ router.post('/generate-carousel-content', async (c) => {
       facts: 'interesting facts, statistics, surprising information'
     };
 
-    const prompt = `Create content for a ${numSlides}-slide Instagram carousel about: "${topic}"
+    const languageNames: Record<string, string> = {
+      en: 'English',
+      cs: 'Czech (Čeština)',
+      sk: 'Slovak (Slovenčina)',
+      de: 'German (Deutsch)',
+      es: 'Spanish (Español)',
+      fr: 'French (Français)'
+    };
+
+    const ctaTypeDescriptions: Record<string, Record<string, string>> = {
+      en: {
+        comment: 'ask viewers to comment (e.g., "Comment YES to get the guide")',
+        save: 'encourage saving the post (e.g., "Save this for later!")',
+        follow: 'ask to follow for more content (e.g., "Follow for more tips")',
+        share: 'encourage sharing with friends (e.g., "Share with your friends")',
+        visit: 'prompt to visit website (e.g., "Visit our website for more")',
+        subscribe: 'ask to subscribe (e.g., "Subscribe for daily updates")',
+        custom: ctaMessage || 'create a custom call-to-action'
+      },
+      cs: {
+        comment: 'požádej o komentář (např. "Napiš ANO pro průvodce")',
+        save: 'povzbuď k uložení příspěvku (např. "Ulož si to na později!")',
+        follow: 'požádej o sledování (např. "Sleduj pro více tipů")',
+        share: 'povzbuď ke sdílení (např. "Sdílej s přáteli")',
+        visit: 'vyzvi k návštěvě webu (např. "Navštiv náš web pro více")',
+        subscribe: 'požádej o odběr (např. "Přihlas se k odběru novinek")',
+        custom: ctaMessage || 'vytvoř vlastní výzvu k akci'
+      },
+      sk: {
+        comment: 'požiadaj o komentár (napr. "Napíš ÁNO pre sprievodcu")',
+        save: 'povzbuď k uloženiu príspevku (napr. "Ulož si to na neskôr!")',
+        follow: 'požiadaj o sledovanie (napr. "Sleduj pre viac tipov")',
+        share: 'povzbuď k zdieľaniu (napr. "Zdieľaj s priateľmi")',
+        visit: 'vyzvi k návšteve webu (napr. "Navštív náš web pre viac")',
+        subscribe: 'požiadaj o odber (napr. "Prihlás sa k odberu noviniek")',
+        custom: ctaMessage || 'vytvor vlastnú výzvu k akcii'
+      },
+      de: {
+        comment: 'bitte um einen Kommentar (z.B. "Kommentiere JA für den Leitfaden")',
+        save: 'ermutige zum Speichern (z.B. "Speichere das für später!")',
+        follow: 'bitte um Folgen (z.B. "Folge für mehr Tipps")',
+        share: 'ermutige zum Teilen (z.B. "Teile mit deinen Freunden")',
+        visit: 'fordere zum Webseitenbesuch auf (z.B. "Besuche unsere Website")',
+        subscribe: 'bitte um Abonnement (z.B. "Abonniere für tägliche Updates")',
+        custom: ctaMessage || 'erstelle einen benutzerdefinierten Call-to-Action'
+      },
+      es: {
+        comment: 'pide un comentario (ej. "Comenta SÍ para la guía")',
+        save: 'anima a guardar (ej. "¡Guarda esto para más tarde!")',
+        follow: 'pide seguir (ej. "Síguenos para más consejos")',
+        share: 'anima a compartir (ej. "Comparte con tus amigos")',
+        visit: 'invita a visitar web (ej. "Visita nuestro sitio web")',
+        subscribe: 'pide suscripción (ej. "Suscríbete para actualizaciones")',
+        custom: ctaMessage || 'crea una llamada a la acción personalizada'
+      },
+      fr: {
+        comment: 'demande un commentaire (ex. "Commente OUI pour le guide")',
+        save: 'encourage à sauvegarder (ex. "Sauvegarde pour plus tard!")',
+        follow: 'demande de suivre (ex. "Suis-nous pour plus de conseils")',
+        share: 'encourage à partager (ex. "Partage avec tes amis")',
+        visit: 'invite à visiter le site (ex. "Visite notre site web")',
+        subscribe: 'demande de s\'abonner (ex. "Abonne-toi pour des mises à jour")',
+        custom: ctaMessage || 'crée un appel à l\'action personnalisé'
+      }
+    };
+
+    const languageName = languageNames[targetLanguage] || languageNames.cs;
+    const ctaInstructions = ctaTypeDescriptions[targetLanguage] || ctaTypeDescriptions.cs;
+    const ctaDesc = ctaInstructions[ctaTypeVal] || ctaInstructions.follow;
+
+    let prompt = `Create content for a ${numSlides}-slide Instagram carousel about: "${topic}"
+
+IMPORTANT: Write ALL content in ${languageName}. The entire carousel must be in ${languageName}.
 
 Style: ${styleGuides[contentStyle] || styleGuides.educational}
 
 Requirements:
-- Slide 1: Hook/Title that grabs attention
-- Slides 2-${numSlides - 1}: Main content points (one key idea per slide)
-- Slide ${numSlides}: Call-to-action or summary
+- Slide 1: Hook/Title that grabs attention (in ${languageName})
+- Slides 2-${numSlides - 1}: Main content points (one key idea per slide, in ${languageName})`;
+
+    if (hasCTA) {
+      prompt += `\n- Slide ${numSlides}: Call-to-action slide - ${ctaDesc} (in ${languageName})`;
+    } else {
+      prompt += `\n- Slide ${numSlides}: Summary or conclusion (in ${languageName})`;
+    }
+
+    prompt += `
 
 Format your response as JSON array with exactly ${numSlides} slides:
 [
-  {"slide": 1, "text": "Your hook text here"},
-  {"slide": 2, "text": "First key point"},
+  {"slide": 1, "text": "Your hook text here in ${languageName}"},
+  {"slide": 2, "text": "First key point in ${languageName}"},
   ...
 ]
 
 Keep each slide text concise (max 100 characters for best readability).
 Use emojis sparingly if appropriate.
+Write everything in ${languageName} - this is critical!
 Return ONLY the JSON array, no other text.`;
 
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -1321,6 +1404,50 @@ router.get('/carousels', async (c) => {
     return c.json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to list carousels'
+    }, 500);
+  }
+});
+
+/**
+ * GET /api/proxy/carousels/:id
+ * Get a specific carousel by ID
+ */
+router.get('/carousels/:id', async (c) => {
+  try {
+    const id = c.req.param('id');
+
+    const result = await c.env.DB.prepare(
+      `SELECT id, title, slide_count, slides, template, primary_color, created_at
+       FROM carousels
+       WHERE id = ?`
+    ).bind(id).first();
+
+    if (!result) {
+      return c.json({
+        success: false,
+        error: 'Carousel not found'
+      }, 404);
+    }
+
+    const carousel = {
+      id: result.id,
+      title: result.title,
+      slideCount: result.slide_count,
+      slides: JSON.parse(result.slides as string || '[]'),
+      template: result.template,
+      primaryColor: result.primary_color,
+      createdAt: result.created_at
+    };
+
+    return c.json({
+      success: true,
+      data: carousel
+    });
+  } catch (error) {
+    console.error('[Proxy] Failed to get carousel:', error);
+    return c.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to get carousel'
     }, 500);
   }
 });

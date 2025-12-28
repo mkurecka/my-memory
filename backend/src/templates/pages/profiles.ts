@@ -803,7 +803,7 @@ export function profilesPage({ apiBase, configured, airtableBaseId }: ProfilesPa
   `;
 
   return baseLayout({
-    title: 'Airtable Data - Universal Text Processor',
+    title: 'Airtable Data - My Memory 🧠',
     content,
     styles,
     scripts

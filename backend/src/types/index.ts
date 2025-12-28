@@ -16,9 +16,13 @@ export interface Env {
   HTML_TO_IMAGE_WORKER_URL?: string;
   HTML_TO_IMAGE_WORKER_API_KEY?: string;
   APP_URL?: string;
-  RAILWAY_WEBHOOK_URL?: string;
+  N8N_WEBHOOK_URL?: string;
+  // YouTube APIs
+  YOUTUBE_API_KEY?: string;
+  SUPADATA_API_KEY?: string;
   // Service bindings
   HTML_TO_IMAGE_SERVICE?: Fetcher;
+  TRANSCRIPT_SERVICE?: Fetcher;
 }
 
 // User types

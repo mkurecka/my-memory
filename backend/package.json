@@ -1,7 +1,7 @@
 {
-  "name": "text-processor-api",
+  "name": "my-memory-api",
   "version": "1.0.0",
-  "description": "Cloudflare Workers backend for Universal Text Processor",
+  "description": "Cloudflare Workers backend for My Memory",
   "main": "src/index.ts",
   "scripts": {
     "dev": "wrangler dev",

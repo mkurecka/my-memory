@@ -70,7 +70,7 @@
     </style>
 </head>
 <body>
-    <h1>🧪 Universal Text Processor - Activation Test</h1>
+    <h1>🧪 My Memory - Activation Test</h1>
 
     <div class="status info">
         <strong>Purpose:</strong> This page will help activate and test your extension's service worker.
@@ -87,7 +87,7 @@
         </ol>
 
         <div class="selectable-text">
-            This is test text for activating the Universal Text Processor extension.
+            This is test text for activating the My Memory extension.
             Select this text and the FAB (Floating Action Button) should appear in the bottom left.
             Click the FAB and choose "Process" to test the extension and activate the service worker.
         </div>
@@ -128,9 +128,9 @@
 
     <div class="test-section">
         <h2>Backend Information</h2>
-        <pre>Backend URL: https://text-processor-api.kureckamichal.workers.dev
+        <pre>Backend URL: https://my-memory.kureckamichal.workers.dev
 API Version: v1
-Webhook: https://text-processor-api.kureckamichal.workers.dev/api/v1/webhook
+Webhook: https://my-memory.kureckamichal.workers.dev/api/v1/webhook
 
 Extension ID: epjggaaoglehneiflbfpkfghikblkjom
 Extension Path: ~/PhpstormProjects/universal-text-processor/extension</pre>
@@ -139,7 +139,7 @@ Extension Path: ~/PhpstormProjects/universal-text-processor/extension</pre>
     <div class="test-section">
         <h2>Expected Console Messages</h2>
         <p>After activating the extension, you should see in the console:</p>
-        <pre>[API Client] Initialized with base URL: https://text-processor-api.kureckamichal.workers.dev
+        <pre>[API Client] Initialized with base URL: https://my-memory.kureckamichal.workers.dev
 [Settings Manager] Settings loaded successfully
 Settings and database loaded successfully</pre>
     </div>
@@ -169,7 +169,7 @@ Settings and database loaded successfully</pre>
             results.innerHTML = '<div class="status info">Testing backend connection...</div>';
 
             try {
-                const response = await fetch('https://text-processor-api.kureckamichal.workers.dev/', {
+                const response = await fetch('https://my-memory.kureckamichal.workers.dev/', {
                     method: 'GET',
                 });
 
@@ -192,7 +192,7 @@ Settings and database loaded successfully</pre>
         // Auto-check on load
         window.addEventListener('load', () => {
             console.log('Extension Activation Test Page Loaded');
-            console.log('Backend URL: https://text-processor-api.kureckamichal.workers.dev');
+            console.log('Backend URL: https://my-memory.kureckamichal.workers.dev');
             console.log('Extension ID: epjggaaoglehneiflbfpkfghikblkjom');
             checkExtension();
         });

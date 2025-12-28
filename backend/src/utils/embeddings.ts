@@ -24,7 +24,7 @@ export async function generateEmbedding(text: string, apiKey: string): Promise<n
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': 'https://text-processor-api.kureckamichal.workers.dev',
-        'X-Title': 'Universal Text Processor'
+        'X-Title': 'My Memory'
       },
       body: JSON.stringify({
         model: 'openai/text-embedding-3-small',

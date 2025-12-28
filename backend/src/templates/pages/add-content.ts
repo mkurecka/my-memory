@@ -475,7 +475,7 @@ export function addContentPage({ apiBase, userId }: AddContentPageProps): string
   `;
 
   return baseLayout({
-    title: 'Add Content - Universal Text Processor',
+    title: 'Add Content - My Memory 🧠',
     content,
     styles,
     scripts

@@ -4,16 +4,16 @@ let selectedText = '';
 let selectionContext = {};
 let selectedImage = null;
 
-console.log('[Universal Text Processor] Content script loaded on:', window.location.href);
+console.log('[My Memory] Content script loaded on:', window.location.href);
 
 // Fetch settings on script load
 (async () => {
   try {
     const response = await fetch(chrome.runtime.getURL('settings.json'));
     appSettings = await response.json();
-    console.log('[Universal Text Processor] Settings loaded successfully');
+    console.log('[My Memory] Settings loaded successfully');
   } catch (error) {
-    console.error('[Universal Text Processor] Failed to load settings:', error);
+    console.error('[My Memory] Failed to load settings:', error);
   }
 })();
 
@@ -174,7 +174,7 @@ async function wakeUpServiceWorker() {
     await chrome.runtime.sendMessage({ action: "ping" });
     return true;
   } catch (error) {
-    console.warn('[Universal Text Processor] Service worker not responding:', error.message);
+    console.warn('[My Memory] Service worker not responding:', error.message);
     return false;
   }
 }
@@ -195,9 +195,9 @@ async function saveToMemoryQuick(text, context) {
     });
 
     showFloatingNotification('✓ Saved to memory', 'success');
-    console.log('[Universal Text Processor] Quick saved to memory');
+    console.log('[My Memory] Quick saved to memory');
   } catch (error) {
-    console.error('[Universal Text Processor] Failed to save:', error);
+    console.error('[My Memory] Failed to save:', error);
     showFloatingNotification('Failed to save', 'error');
   }
 }
@@ -246,7 +246,7 @@ function handleImageClick(event) {
       fab.classList.add('utp-fab-visible');
     }
 
-    console.log('[Universal Text Processor] Image selected:', selectedImage.src);
+    console.log('[My Memory] Image selected:', selectedImage.src);
   }
 }
 
@@ -448,8 +448,8 @@ async function getActionSpecificFields(mode) {
       </select>
     `,
     describe_image: `
-      <div style="padding: 12px; background: rgba(102, 126, 234, 0.08); border-radius: 12px; margin-bottom: 15px;">
-        <div style="font-size: 13px; font-weight: 600; color: #667eea; margin-bottom: 8px;">
+      <div style="padding: 12px; background: rgba(29, 155, 240, 0.08); border-radius: 12px; margin-bottom: 15px;">
+        <div style="font-size: 13px; font-weight: 600; color: #1d9bf0; margin-bottom: 8px;">
           🤖 AI Vision Analysis
         </div>
         <div style="font-size: 12px; color: #666; line-height: 1.5;">
@@ -543,10 +543,10 @@ function collectActionParameters(mode) {
 
 // Open the processing modal
 async function openProcessModal(text, context) {
-  console.log('[Universal Text Processor] Opening modal with text:', text?.substring(0, 50));
+  console.log('[My Memory] Opening modal with text:', text?.substring(0, 50));
 
   if (!text || text.length === 0) {
-    console.warn('[Universal Text Processor] No text provided to modal');
+    console.warn('[My Memory] No text provided to modal');
     alert('No text selected. Please select some text first.');
     return;
   }
@@ -555,9 +555,9 @@ async function openProcessModal(text, context) {
   let keyStatus;
   try {
     keyStatus = await checkApiKey();
-    console.log('[Universal Text Processor] API key status:', keyStatus.hasKey);
+    console.log('[My Memory] API key status:', keyStatus.hasKey);
   } catch (error) {
-    console.error('[Universal Text Processor] Error checking API key:', error);
+    console.error('[My Memory] Error checking API key:', error);
     keyStatus = { hasKey: false };
   }
 
@@ -593,8 +593,7 @@ async function openProcessModal(text, context) {
           `}
         </div>
 
-        ${!keyStatus.hasKey ? '<div style="padding: 10px; background: #fff3cd; border-radius: 5px; margin-bottom: 15px; font-size: 12px;"><strong>⚠️ API Key Required:</strong> Please <a href="#" id="setup-api-key" style="color: #0066cc; text-decoration: underline;">configure your OpenRouter API key</a> to use AI processing.</div>' : ''}
-
+        
         <label><strong>Action:</strong></label>
         <div style="margin-bottom: 15px; padding: 10px; background: #fafafa; border-radius: 5px;">
           ${isImage ? getModeOptions('describe_image') : getModeOptions()}
@@ -646,7 +645,7 @@ async function openProcessModal(text, context) {
         <div class="my-plugin-actions">
           <button id="plugin-cancel" class="btn-cancel">Cancel</button>
           <button id="plugin-save-memory" class="btn-settings">💾 Save to Memory</button>
-          <button id="plugin-send" class="btn-send" ${!keyStatus.hasKey ? 'disabled' : ''}>Process</button>
+          <button id="plugin-send" class="btn-send">Process</button>
         </div>
       </div>
     </div>
@@ -700,7 +699,7 @@ async function openProcessModal(text, context) {
         if (webhookDiv) webhookDiv.style.display = 'block';
       }
 
-      console.log('[Universal Text Processor] Mode changed to:', selectedMode);
+      console.log('[My Memory] Mode changed to:', selectedMode);
     });
   });
 
@@ -847,14 +846,14 @@ async function processText(text, context, mode, actionParams, language, comment,
       const match = imageData.match(/https:\/\/substackcdn\.com\/image\/fetch\/[^/]+\/(https?%3A%2F%2F[^?]+)/);
       if (match && match[1]) {
         const actualUrl = decodeURIComponent(match[1]);
-        console.log('[Universal Text Processor] Extracted actual URL from Substack CDN:', actualUrl);
-        console.log('[Universal Text Processor] Original CDN URL:', imageData);
+        console.log('[My Memory] Extracted actual URL from Substack CDN:', actualUrl);
+        console.log('[My Memory] Original CDN URL:', imageData);
         imageData = actualUrl;
       }
     }
 
     statusDiv.innerText = "Processing with AI Vision...";
-    console.log('[Universal Text Processor] Final image URL being sent:', imageData);
+    console.log('[My Memory] Final image URL being sent:', imageData);
   }
 
   // Send message to background.js
@@ -1117,7 +1116,7 @@ async function openVisualContentModal(text, context) {
     if (imageModelsLoaded) return;
 
     try {
-      const backendUrl = appSettings?.backend?.baseUrl || 'https://text-processor-api.kureckamichal.workers.dev';
+      const backendUrl = appSettings?.backend?.baseUrl || 'https://my-memory.kureckamichal.workers.dev';
       const response = await fetch(`${backendUrl}/api/proxy/image-models`);
       const data = await response.json();
 
@@ -1336,9 +1335,6 @@ async function openVisualContentModal(text, context) {
 
 // Settings Modal
 async function openSettingsModal() {
-  const keyStatus = await checkApiKey();
-  const maskedKey = keyStatus.apiKey ? `${keyStatus.apiKey.substring(0, 10)}...${keyStatus.apiKey.substring(keyStatus.apiKey.length - 4)}` : 'Not configured';
-
   // Load saved model settings and prompts
   const savedSettings = await new Promise((resolve) => {
     chrome.storage.local.get(['contentModel', 'imageModel', 'customPrompts'], (result) => {
@@ -1351,6 +1347,35 @@ async function openSettingsModal() {
   const customPrompts = savedSettings.customPrompts || {};
 
   const webhookConfig = appSettings?.webhook || {};
+
+  // Fetch enabled models from backend
+  const backendUrl = appSettings?.backend?.baseUrl || 'https://my-memory.kureckamichal.workers.dev';
+  let enabledModels = { text: [], image: [], video: [], imageGen: [] };
+  try {
+    const response = await fetch(`${backendUrl}/api/enabled-models`);
+    const result = await response.json();
+    if (result.success && result.models) {
+      enabledModels = result.models;
+    }
+  } catch (e) {
+    console.log('Could not fetch enabled models from backend:', e);
+  }
+
+  // Build model options for dropdowns
+  const buildModelOptions = (models, currentValue) => {
+    if (!models || models.length === 0) {
+      return `<option value="${currentValue}">${currentValue}</option>`;
+    }
+    return models.map(m => {
+      const selected = m === currentValue ? 'selected' : '';
+      return `<option value="${m}" ${selected}>${m}</option>`;
+    }).join('');
+  };
+
+  const textModelOptions = buildModelOptions(enabledModels.text, contentModel);
+  const imageModelOptions = buildModelOptions(enabledModels.image, imageModel);
+  const hasTextModels = enabledModels.text && enabledModels.text.length > 0;
+  const hasImageModels = enabledModels.image && enabledModels.image.length > 0;
 
   // Get default prompts from settings.json
   const defaultPrompts = {};
@@ -1365,46 +1390,54 @@ async function openSettingsModal() {
       <div class="my-plugin-modal" style="max-height: 90vh; overflow-y: auto;">
         <h3>⚙️ Extension Settings</h3>
 
-        <label>OpenRouter API Key:</label>
-        <p style="font-size: 11px; color: #666; margin: 5px 0 10px 0;">
-          Get your API key from <a href="https://openrouter.ai/keys" target="_blank" style="color: #0066cc;">openrouter.ai/keys</a>
-        </p>
-
-        <div style="margin-bottom: 15px;">
-          <div style="font-size: 12px; color: #555; margin-bottom: 5px;">
-            Current: <code>${maskedKey}</code>
+        <div style="padding: 12px; background: #e8f5e9; border-radius: 8px; margin-bottom: 15px;">
+          <div style="font-size: 13px; color: #2e7d32; font-weight: 600;">✓ API Key Configured on Backend</div>
+          <div style="font-size: 11px; color: #555; margin-top: 4px;">
+            AI processing uses the server-side API key. No local configuration needed.
           </div>
-          <input type="password" id="settings-api-key" class="my-plugin-input"
-                 placeholder="sk-or-v1-..." style="width: 100%; font-family: monospace;">
         </div>
-
-        <hr style="margin: 20px 0; border: none; border-top: 1px solid #ddd;">
 
         <label>AI Model Configuration:</label>
         <p style="font-size: 11px; color: #666; margin: 5px 0 10px 0;">
-          Configure which models to use for text processing and image analysis
+          ${hasTextModels || hasImageModels
+            ? 'Select from models enabled in the dashboard settings'
+            : 'Configure models in the <a href="' + backendUrl + '/dashboard/settings" target="_blank">dashboard settings</a>'}
         </p>
 
         <div style="margin-bottom: 15px;">
           <label>Text Processing Model:</label>
-          <input type="text" id="settings-content-model" class="my-plugin-input"
+          ${hasTextModels
+            ? `<select id="settings-content-model" class="my-plugin-input" style="width: 100%; font-size: 11px;">
+                ${textModelOptions}
+              </select>
+              <div style="font-size: 10px; color: #888; margin-top: 3px;">
+                ${enabledModels.text.length} models enabled in dashboard
+              </div>`
+            : `<input type="text" id="settings-content-model" class="my-plugin-input"
                  placeholder="openai/gpt-4o-mini"
                  value="${contentModel}"
                  style="width: 100%; font-family: monospace; font-size: 11px;">
-          <div style="font-size: 10px; color: #888; margin-top: 3px;">
-            Examples: openai/gpt-4o-mini, anthropic/claude-3.5-sonnet, google/gemini-pro
-          </div>
+              <div style="font-size: 10px; color: #888; margin-top: 3px;">
+                No models configured. <a href="${backendUrl}/dashboard/settings" target="_blank">Configure in dashboard</a>
+              </div>`}
         </div>
 
         <div style="margin-bottom: 15px;">
           <label>Image Analysis Model:</label>
-          <input type="text" id="settings-image-model" class="my-plugin-input"
+          ${hasImageModels
+            ? `<select id="settings-image-model" class="my-plugin-input" style="width: 100%; font-size: 11px;">
+                ${imageModelOptions}
+              </select>
+              <div style="font-size: 10px; color: #888; margin-top: 3px;">
+                ${enabledModels.image.length} vision models enabled in dashboard
+              </div>`
+            : `<input type="text" id="settings-image-model" class="my-plugin-input"
                  placeholder="google/gemini-2.0-flash-001"
                  value="${imageModel}"
                  style="width: 100%; font-family: monospace; font-size: 11px;">
-          <div style="font-size: 10px; color: #888; margin-top: 3px;">
-            Examples: google/gemini-2.0-flash-001, openai/gpt-4o, anthropic/claude-3.5-sonnet
-          </div>
+              <div style="font-size: 10px; color: #888; margin-top: 3px;">
+                No models configured. <a href="${backendUrl}/dashboard/settings" target="_blank">Configure in dashboard</a>
+              </div>`}
         </div>
 
         <hr style="margin: 20px 0; border: none; border-top: 1px solid #ddd;">
@@ -1512,7 +1545,6 @@ async function openSettingsModal() {
   document.addEventListener('keydown', handleSettingsEscape);
 
   document.getElementById("settings-save").addEventListener("click", async () => {
-    const apiKey = document.getElementById("settings-api-key").value.trim();
     const contentModel = document.getElementById("settings-content-model").value.trim();
     const imageModel = document.getElementById("settings-image-model").value.trim();
     const webhookEnabled = document.getElementById("settings-webhook-enabled").checked;
@@ -1529,20 +1561,9 @@ async function openSettingsModal() {
       describe_image: document.getElementById("settings-prompt-describe-image").value.trim()
     };
 
-    if (apiKey && !apiKey.startsWith("sk-or-v1-")) {
-      statusDiv.innerText = "Invalid API key format. OpenRouter keys start with 'sk-or-v1-'";
-      statusDiv.style.color = "red";
-      return;
-    }
-
-    if (!contentModel) {
-      statusDiv.innerText = "Text Processing Model is required";
-      statusDiv.style.color = "red";
-      return;
-    }
-
-    if (!imageModel) {
-      statusDiv.innerText = "Image Analysis Model is required";
+    // Validation - models are optional if using dropdowns with pre-selected values
+    if (!contentModel && !imageModel) {
+      statusDiv.innerText = "Please select at least one model";
       statusDiv.style.color = "red";
       return;
     }
@@ -1554,7 +1575,6 @@ async function openSettingsModal() {
       {
         action: "saveSettings",
         data: {
-          apiKey: apiKey || null,
           contentModel: contentModel,
           imageModel: imageModel,
           customPrompts: customPrompts,
@@ -1830,7 +1850,7 @@ function extractTweetData(tweetElement) {
       }
     };
   } catch (error) {
-    console.error('[Universal Text Processor] Error extracting tweet data:', error);
+    console.error('[My Memory] Error extracting tweet data:', error);
     return null;
   }
 }
@@ -1875,7 +1895,7 @@ function injectSaveTweetButton(tweetElement) {
     </svg>
   `;
 
-  saveButton.title = 'Save tweet to Universal Text Processor';
+  saveButton.title = 'Save tweet to My Memory';
 
   // Hover effects
   saveButton.addEventListener('mouseenter', () => {
@@ -1899,11 +1919,11 @@ function injectSaveTweetButton(tweetElement) {
     const tweetData = extractTweetData(tweetElement);
 
     if (!tweetData) {
-      console.error('[Universal Text Processor] Failed to extract tweet data');
+      console.error('[My Memory] Failed to extract tweet data');
       return;
     }
 
-    console.log('[Universal Text Processor] Saving tweet:', tweetData);
+    console.log('[My Memory] Saving tweet:', tweetData);
 
     // Show loading state
     const originalHTML = saveButton.innerHTML;
@@ -1939,7 +1959,7 @@ function injectSaveTweetButton(tweetElement) {
         throw new Error(response?.error || 'Failed to save tweet');
       }
     } catch (error) {
-      console.error('[Universal Text Processor] Error saving tweet:', error);
+      console.error('[My Memory] Error saving tweet:', error);
 
       // Show error state
       saveButton.innerHTML = `
@@ -1968,7 +1988,7 @@ function initTwitterObserver() {
     return;
   }
 
-  console.log('[Universal Text Processor] Initializing X/Twitter integration');
+  console.log('[My Memory] Initializing X/Twitter integration');
 
   // Process existing tweets
   const processTweets = () => {
