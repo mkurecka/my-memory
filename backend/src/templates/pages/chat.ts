@@ -283,6 +283,23 @@ export function chatPage({ apiBase, conversationCount = 0 }: ChatPageProps): str
         align-items: flex-start;
         gap: 0.5rem;
         padding: 0.375rem 0;
+        position: relative;
+      }
+
+      .source-link {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+        text-decoration: none;
+        cursor: pointer;
+        transition: all 0.2s;
+        padding: 0.25rem 0.5rem;
+        margin: -0.25rem -0.5rem;
+        border-radius: 6px;
+      }
+
+      .source-link:hover {
+        background: var(--primary-light);
       }
 
       .source-badge {
@@ -293,11 +310,88 @@ export function chatPage({ apiBase, conversationCount = 0 }: ChatPageProps): str
         color: var(--primary);
         font-weight: 500;
         text-transform: uppercase;
+        flex-shrink: 0;
       }
 
       .source-preview {
         color: var(--text-secondary);
         font-size: 0.8rem;
+      }
+
+      .source-link:hover .source-preview {
+        color: var(--primary);
+      }
+
+      /* Tooltip */
+      .source-tooltip {
+        position: absolute;
+        left: 0;
+        bottom: 100%;
+        width: 320px;
+        max-width: 90vw;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0.75rem;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 1000;
+        display: none;
+        margin-bottom: 0.5rem;
+      }
+
+      .source-item:hover .source-tooltip {
+        display: block;
+      }
+
+      .tooltip-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .tooltip-type {
+        font-size: 0.7rem;
+        padding: 0.125rem 0.375rem;
+        border-radius: 4px;
+        background: var(--primary-light);
+        color: var(--primary);
+        font-weight: 500;
+        text-transform: uppercase;
+      }
+
+      .tooltip-similarity {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+      }
+
+      .tooltip-content {
+        font-size: 0.8rem;
+        color: var(--text-primary);
+        line-height: 1.5;
+        max-height: 150px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .tooltip-footer {
+        margin-top: 0.5rem;
+        padding-top: 0.5rem;
+        border-top: 1px solid var(--border);
+        font-size: 0.7rem;
+        color: var(--text-secondary);
+      }
+
+      .tooltip-footer a {
+        color: var(--primary);
+        text-decoration: none;
+      }
+
+      .tooltip-footer a:hover {
+        text-decoration: underline;
       }
 
       .message.loading {
@@ -528,12 +622,7 @@ export function chatPage({ apiBase, conversationCount = 0 }: ChatPageProps): str
               html += \`
                 <div class="sources">
                   <div class="sources-title">Sources:</div>
-                  \${msg.sources.map(s => \`
-                    <div class="source-item">
-                      <span class="source-badge">\${s.type}</span>
-                      <span class="source-preview">\${escapeHtml(s.preview || s.text?.substring(0, 100) || '')}</span>
-                    </div>
-                  \`).join('')}
+                  \${msg.sources.map(s => renderSource(s)).join('')}
                 </div>
               \`;
             }
@@ -613,12 +702,7 @@ export function chatPage({ apiBase, conversationCount = 0 }: ChatPageProps): str
             html += \`
               <div class="sources">
                 <div class="sources-title">Sources:</div>
-                \${sources.map(s => \`
-                  <div class="source-item">
-                    <span class="source-badge">\${s.type}</span>
-                    <span class="source-preview">\${escapeHtml(s.preview || '')}</span>
-                  </div>
-                \`).join('')}
+                \${sources.map(s => renderSource(s)).join('')}
               </div>
             \`;
           }
@@ -681,6 +765,60 @@ export function chatPage({ apiBase, conversationCount = 0 }: ChatPageProps): str
           const div = document.createElement('div');
           div.textContent = text;
           return div.innerHTML;
+        }
+
+        function renderSource(s) {
+          const url = s.url || s.link || '';
+          const preview = escapeHtml(s.preview || '');
+          const fullPreview = escapeHtml(s.preview || s.text || '');
+          const similarity = s.similarity ? Math.round(s.similarity * 100) + '%' : '';
+          const type = s.type || 'memory';
+
+          // Determine icon based on type
+          let icon = '📄';
+          if (type === 'tweet') icon = '🐦';
+          else if (type === 'youtube_video') icon = '📺';
+          else if (type === 'memory') icon = '🧠';
+          else if (type === 'post') icon = '📝';
+
+          // Build tooltip
+          const tooltip = \`
+            <div class="source-tooltip">
+              <div class="tooltip-header">
+                <span class="tooltip-type">\${icon} \${type}</span>
+                <span class="tooltip-similarity">\${similarity} match</span>
+              </div>
+              <div class="tooltip-content">\${fullPreview}</div>
+              \${url ? \`
+                <div class="tooltip-footer">
+                  <a href="\${escapeHtml(url)}" target="_blank" rel="noopener">Open source ↗</a>
+                </div>
+              \` : ''}
+            </div>
+          \`;
+
+          // Render clickable source with tooltip
+          if (url) {
+            return \`
+              <div class="source-item">
+                <a href="\${escapeHtml(url)}" target="_blank" rel="noopener" class="source-link">
+                  <span class="source-badge">\${icon} \${type}</span>
+                  <span class="source-preview">\${preview}</span>
+                </a>
+                \${tooltip}
+              </div>
+            \`;
+          } else {
+            return \`
+              <div class="source-item">
+                <div class="source-link">
+                  <span class="source-badge">\${icon} \${type}</span>
+                  <span class="source-preview">\${preview}</span>
+                </div>
+                \${tooltip}
+              </div>
+            \`;
+          }
         }
       })();
     </script>
