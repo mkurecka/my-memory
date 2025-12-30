@@ -88,7 +88,8 @@ export async function generateEmbeddingsBatch(env: Env, texts: string[]): Promis
 }
 
 /**
- * Insert a vector into Vectorize index
+ * Insert or update a vector in Vectorize index
+ * Uses upsert to handle duplicates properly
  */
 export async function insertVector(
   env: Env,
@@ -102,15 +103,17 @@ export async function insertVector(
       return false;
     }
 
-    await env.VECTORIZE.insert([{
+    // Use upsert to insert or update existing vectors
+    await env.VECTORIZE.upsert([{
       id,
       values: embedding,
       metadata
     }]);
 
+    console.log('[Embeddings] Upserted vector:', id, 'metadata:', JSON.stringify(metadata));
     return true;
   } catch (error) {
-    console.error('[Embeddings] Error inserting vector:', error);
+    console.error('[Embeddings] Error upserting vector:', error);
     return false;
   }
 }
@@ -135,11 +138,12 @@ export async function deleteVector(env: Env, id: string): Promise<boolean> {
 
 /**
  * Search for similar vectors using Vectorize
+ * Note: Metadata filtering is done in-memory due to Vectorize quirks
  */
 export async function vectorSearch(
   env: Env,
   queryEmbedding: number[],
-  userId: string,
+  userId: string | null,
   options: {
     topK?: number;
     minScore?: number;
@@ -154,20 +158,40 @@ export async function vectorSearch(
 
     const { topK = 10, minScore = 0.7, table } = options;
 
-    // Build filter for user_id and optional table
-    const filter: Record<string, string> = { user_id: userId };
-    if (table) {
-      filter.table = table;
-    }
+    // Query without filter - Vectorize filters can be unreliable
+    // Request more results since we'll filter in-memory
+    const queryTopK = Math.min(topK * 3, 50);
+
+    console.log('[Embeddings] Vectorize query (no filter), topK:', queryTopK, 'target table:', table);
 
     const results = await env.VECTORIZE.query(queryEmbedding, {
-      topK,
-      filter,
+      topK: queryTopK,
       returnMetadata: 'all'
     });
 
+    console.log('[Embeddings] Raw results count:', results.matches.length, 'scores:', results.matches.slice(0, 5).map(m => m.score.toFixed(3)));
+
+    // Filter in-memory by table, userId, and minScore
+    let filtered = results.matches;
+
+    // Filter by table if specified
+    if (table) {
+      filtered = filtered.filter(match => (match.metadata as any)?.table === table);
+      console.log('[Embeddings] After table filter:', filtered.length);
+    }
+
+    // Filter by userId if specified
+    if (userId) {
+      filtered = filtered.filter(match => (match.metadata as any)?.user_id === userId);
+      console.log('[Embeddings] After userId filter:', filtered.length);
+    }
+
     // Filter by minimum score
-    return results.matches.filter(match => match.score >= minScore);
+    filtered = filtered.filter(match => match.score >= minScore);
+    console.log('[Embeddings] After minScore filter (', minScore, '):', filtered.length);
+
+    // Return only the requested topK
+    return filtered.slice(0, topK);
   } catch (error) {
     console.error('[Embeddings] Vector search error:', error);
     return [];

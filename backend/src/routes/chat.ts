@@ -9,11 +9,12 @@ interface ChatRequest {
   message: string;
   conversationId?: string;
   userId?: string;
-  model?: string;
+  model?: string;  // Workers AI model: llama-3.1-8b-instruct (default), llama-3.2-3b-instruct (faster)
   includeMemories?: boolean;
   includePosts?: boolean;
   topK?: number;
   minSimilarity?: number;
+  useOpenRouter?: boolean;  // Set true to use OpenRouter instead of Workers AI
 }
 
 interface Source {
@@ -22,6 +23,7 @@ interface Source {
   text: string;
   similarity: number;
   created_at: number;
+  url?: string;  // Link to source if available
 }
 
 /**
@@ -35,11 +37,12 @@ router.post('/', async (c) => {
       message,
       conversationId,
       userId = 'default_user',
-      model = 'anthropic/claude-3.5-sonnet',
+      model = '@cf/meta/llama-3.1-8b-instruct',  // Workers AI model (FREE)
       includeMemories = true,
       includePosts = true,
       topK = 5,
-      minSimilarity = 0.6
+      minSimilarity = 0.5,  // Lowered default for better recall
+      useOpenRouter = false
     } = body;
 
     if (!message || message.trim().length === 0) {
@@ -53,34 +56,47 @@ router.post('/', async (c) => {
     }
 
     // Search for relevant context from Vectorize
+    // Note: Pass null for userId to search all content (personal app, no multi-user filtering)
     const sources: Source[] = [];
+
+    console.log('[Chat] Starting vector search, VECTORIZE available:', !!c.env.VECTORIZE);
 
     if (c.env.VECTORIZE) {
       // Search memories
       if (includeMemories) {
-        const memoryResults = await vectorSearch(c.env, queryEmbedding, userId, {
+        console.log('[Chat] Searching memories with minScore:', minSimilarity);
+        const memoryResults = await vectorSearch(c.env, queryEmbedding, null, {
           topK,
           minScore: minSimilarity,
           table: 'memory'
         });
+        console.log('[Chat] Memory results count:', memoryResults.length);
 
         if (memoryResults.length > 0) {
           const memIds = memoryResults.map(r => r.id);
           const placeholders = memIds.map(() => '?').join(',');
           const memData = await c.env.DB.prepare(
-            `SELECT id, text, created_at FROM memory WHERE id IN (${placeholders})`
+            `SELECT id, text, context_json, created_at FROM memory WHERE id IN (${placeholders})`
           ).bind(...memIds).all();
 
           const memMap = new Map((memData.results || []).map((r: any) => [r.id, r]));
           for (const vr of memoryResults) {
             const mem = memMap.get(vr.id) as any;
             if (mem) {
+              // Extract URL from context_json if available
+              let url: string | undefined;
+              try {
+                const context = mem.context_json ? JSON.parse(mem.context_json) : {};
+                url = context.url || context.source_url || context.sourceUrl;
+              } catch { /* ignore parse errors */ }
+
               sources.push({
                 id: mem.id,
                 type: 'memory',
                 text: mem.text,
                 similarity: vr.score,
-                created_at: mem.created_at
+                created_at: mem.created_at,
+                url
               });
             }
           }
@@ -89,29 +105,39 @@ router.post('/', async (c) => {
 
       // Search posts
       if (includePosts) {
-        const postResults = await vectorSearch(c.env, queryEmbedding, userId, {
+        console.log('[Chat] Searching posts with minScore:', minSimilarity);
+        const postResults = await vectorSearch(c.env, queryEmbedding, null, {
           topK,
           minScore: minSimilarity,
           table: 'posts'
         });
+        console.log('[Chat] Posts results count:', postResults.length);
 
         if (postResults.length > 0) {
           const postIds = postResults.map(r => r.id);
           const placeholders = postIds.map(() => '?').join(',');
           const postData = await c.env.DB.prepare(
-            `SELECT id, type, original_text, generated_output, created_at FROM posts WHERE id IN (${placeholders})`
+            `SELECT id, type, original_text, generated_output, context_json, created_at FROM posts WHERE id IN (${placeholders})`
           ).bind(...postIds).all();
 
           const postMap = new Map((postData.results || []).map((r: any) => [r.id, r]));
           for (const vr of postResults) {
             const post = postMap.get(vr.id) as any;
             if (post) {
+              // Extract URL from context_json if available
+              let url: string | undefined;
+              try {
+                const context = post.context_json ? JSON.parse(post.context_json) : {};
+                url = context.url || context.source_url || context.sourceUrl || context.tweetUrl;
+              } catch { /* ignore parse errors */ }
+
               sources.push({
                 id: post.id,
                 type: post.type || 'post',
                 text: post.generated_output || post.original_text,
                 similarity: vr.score,
-                created_at: post.created_at
+                created_at: post.created_at,
+                url
               });
             }
           }
@@ -170,34 +196,64 @@ Be conversational and helpful.`;
       ).bind(currentConversationId, userId, Date.now(), Date.now()).run();
     }
 
-    // Call OpenRouter API
-    const openRouterResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${c.env.OPENROUTER_API_KEY}`,
-        'HTTP-Referer': c.env.APP_URL || 'https://my-memory.app',
-        'X-Title': 'My Memory Chat',
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          ...conversationHistory,
-          { role: 'user', content: userPrompt }
-        ],
-      }),
-    });
+    let assistantMessage = '';
+    let usage: { total_tokens?: number; prompt_tokens?: number; completion_tokens?: number } = {};
+    const actualModel = model;
 
-    if (!openRouterResponse.ok) {
-      const error = await openRouterResponse.text();
-      console.error('[Chat] OpenRouter API error:', error);
-      return c.json({ success: false, error: 'Failed to generate response' }, 500);
+    if (useOpenRouter && c.env.OPENROUTER_API_KEY) {
+      // Use OpenRouter API (paid)
+      console.log('[Chat] Using OpenRouter with model:', model);
+      const openRouterResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${c.env.OPENROUTER_API_KEY}`,
+          'HTTP-Referer': c.env.APP_URL || 'https://my-memory.app',
+          'X-Title': 'My Memory Chat',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            ...conversationHistory,
+            { role: 'user', content: userPrompt }
+          ],
+        }),
+      });
+
+      if (!openRouterResponse.ok) {
+        const error = await openRouterResponse.text();
+        console.error('[Chat] OpenRouter API error:', error);
+        return c.json({ success: false, error: 'Failed to generate response' }, 500);
+      }
+
+      const result = await openRouterResponse.json() as any;
+      assistantMessage = result.choices?.[0]?.message?.content || '';
+      usage = result.usage || {};
+    } else {
+      // Use Cloudflare Workers AI (FREE)
+      console.log('[Chat] Using Workers AI with model:', model);
+
+      if (!c.env.AI) {
+        return c.json({ success: false, error: 'AI binding not available' }, 500);
+      }
+
+      // Workers AI chat format
+      const aiMessages = [
+        { role: 'system', content: systemPrompt },
+        ...conversationHistory.map(m => ({ role: m.role, content: m.content })),
+        { role: 'user', content: userPrompt }
+      ];
+
+      const aiResult = await c.env.AI.run(model, {
+        messages: aiMessages,
+        max_tokens: 1024
+      }) as { response?: string };
+
+      assistantMessage = aiResult?.response || '';
+      // Workers AI doesn't return detailed token usage
+      usage = { total_tokens: 0 };
     }
-
-    const result = await openRouterResponse.json() as any;
-    const assistantMessage = result.choices?.[0]?.message?.content || '';
-    const usage = result.usage;
 
     // Save messages to conversation history
     const messageIndex = conversationHistory.length;
@@ -237,11 +293,14 @@ Be conversational and helpful.`;
       success: true,
       conversationId: currentConversationId,
       message: assistantMessage,
+      model: actualModel,
       sources: topSources.map(s => ({
         id: s.id,
         type: s.type,
         preview: s.text.substring(0, 150) + (s.text.length > 150 ? '...' : ''),
-        similarity: Math.round(s.similarity * 100) / 100
+        similarity: Math.round(s.similarity * 100) / 100,
+        url: s.url || null,
+        link: s.url || `/dashboard/memories?id=${s.id}`  // Dashboard link as fallback
       })),
       usage: {
         totalTokens: usage?.total_tokens,

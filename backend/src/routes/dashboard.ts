@@ -10,6 +10,7 @@ import { claudeSessionsPage } from '../templates/pages/claude-sessions';
 import { settingsPage } from '../templates/pages/settings';
 import { allContentPage } from '../templates/pages/all-content';
 import { tasksPage } from '../templates/pages/tasks';
+import { chatPage } from '../templates/pages/chat';
 import { AirtableService } from '../services/airtable';
 
 const router = new Hono<{ Bindings: Env }>();
@@ -271,6 +272,24 @@ router.get('/tasks', async (c) => {
   } catch (error: any) {
     console.error('Tasks page error:', error);
     return c.html(errorPage('Tasks Error', error.message), 500);
+  }
+});
+
+/**
+ * GET /dashboard/chat
+ * RAG-powered chat page for querying memories
+ */
+router.get('/chat', async (c) => {
+  try {
+    const apiBase = c.env.APP_URL;
+    const result = await c.env.DB.prepare('SELECT COUNT(*) as count FROM chat_conversations').first<any>();
+    const conversationCount = result?.count || 0;
+
+    const html = chatPage({ apiBase, conversationCount });
+    return c.html(html);
+  } catch (error: any) {
+    console.error('Chat page error:', error);
+    return c.html(errorPage('Chat Error', error.message), 500);
   }
 });
 

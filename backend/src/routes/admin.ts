@@ -239,6 +239,87 @@ router.post('/migrate-memory', async (c) => {
 });
 
 /**
+ * POST /api/admin/sync-vectorize
+ * Re-sync existing embeddings from D1 to Vectorize
+ * Use this when D1 has embeddings but Vectorize is empty
+ */
+router.post('/sync-vectorize', async (c) => {
+  if (!checkAdminAuth(c)) {
+    return c.json({ success: false, error: 'Unauthorized' }, 401);
+  }
+
+  try {
+    const { batchSize = 50 } = await c.req.json().catch(() => ({}));
+
+    if (!c.env.VECTORIZE) {
+      return c.json({ success: false, error: 'Vectorize not available' }, 500);
+    }
+
+    let synced = 0;
+    let errors = 0;
+    const errorDetails: string[] = [];
+
+    // Sync posts with existing embeddings
+    const posts = await c.env.DB.prepare(`
+      SELECT id, user_id, type, embedding_vector
+      FROM posts
+      WHERE embedding_vector IS NOT NULL AND embedding_model = ?
+      LIMIT ?
+    `).bind(EMBEDDING_MODEL, batchSize).all();
+
+    for (const post of (posts.results || []) as any[]) {
+      try {
+        const embedding = JSON.parse(post.embedding_vector);
+        await insertVector(c.env, post.id, embedding, {
+          user_id: post.user_id || 'default_user',
+          table: 'posts',
+          type: post.type || 'unknown'
+        });
+        synced++;
+      } catch (err: any) {
+        errors++;
+        errorDetails.push(`Post ${post.id}: ${err.message}`);
+      }
+    }
+
+    // Sync memories with existing embeddings
+    const memories = await c.env.DB.prepare(`
+      SELECT id, user_id, embedding_vector
+      FROM memory
+      WHERE embedding_vector IS NOT NULL AND embedding_model = ?
+      LIMIT ?
+    `).bind(EMBEDDING_MODEL, batchSize).all();
+
+    for (const memory of (memories.results || []) as any[]) {
+      try {
+        const embedding = JSON.parse(memory.embedding_vector);
+        await insertVector(c.env, memory.id, embedding, {
+          user_id: memory.user_id || 'default_user',
+          table: 'memory',
+          type: 'memory'
+        });
+        synced++;
+      } catch (err: any) {
+        errors++;
+        errorDetails.push(`Memory ${memory.id}: ${err.message}`);
+      }
+    }
+
+    return c.json({
+      success: true,
+      synced,
+      errors,
+      errorDetails: errorDetails.slice(0, 10),
+      postsCount: posts.results?.length || 0,
+      memoryCount: memories.results?.length || 0
+    });
+  } catch (error: any) {
+    console.error('[Admin] Sync vectorize error:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+/**
  * POST /api/admin/migrate-all
  * Run full migration (for small datasets)
  */
@@ -298,6 +379,76 @@ router.post('/migrate-all', async (c) => {
     });
   } catch (error: any) {
     console.error('[Admin] Migrate all error:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+/**
+ * POST /api/admin/test-vectorize
+ * Test vectorize query directly
+ */
+router.post('/test-vectorize', async (c) => {
+  if (!checkAdminAuth(c)) {
+    return c.json({ success: false, error: 'Unauthorized' }, 401);
+  }
+
+  try {
+    const { query = 'test' } = await c.req.json().catch(() => ({}));
+
+    if (!c.env.VECTORIZE || !c.env.AI) {
+      return c.json({ success: false, error: 'VECTORIZE or AI not available' }, 500);
+    }
+
+    // Generate embedding for query
+    const embeddingResult = await c.env.AI.run('@cf/baai/bge-base-en-v1.5', {
+      text: [query]
+    }) as { shape: number[]; data: number[][] };
+
+    if (!embeddingResult?.data?.[0]) {
+      return c.json({ success: false, error: 'Failed to generate embedding' }, 500);
+    }
+
+    const queryEmbedding = embeddingResult.data[0];
+    console.log('[TestVectorize] Query embedding generated, dimensions:', queryEmbedding.length);
+
+    // Test 1: Query without any filter
+    const noFilterResults = await c.env.VECTORIZE.query(queryEmbedding, {
+      topK: 5,
+      returnMetadata: 'all'
+    });
+    console.log('[TestVectorize] No filter results:', noFilterResults.matches.length);
+
+    // Test 2: Query with just table filter
+    const tableFilterResults = await c.env.VECTORIZE.query(queryEmbedding, {
+      topK: 5,
+      filter: { table: 'posts' },
+      returnMetadata: 'all'
+    });
+    console.log('[TestVectorize] Table filter results:', tableFilterResults.matches.length);
+
+    return c.json({
+      success: true,
+      queryText: query,
+      embeddingDimensions: queryEmbedding.length,
+      noFilter: {
+        count: noFilterResults.matches.length,
+        matches: noFilterResults.matches.map(m => ({
+          id: m.id,
+          score: m.score,
+          metadata: m.metadata
+        }))
+      },
+      tableFilter: {
+        count: tableFilterResults.matches.length,
+        matches: tableFilterResults.matches.map(m => ({
+          id: m.id,
+          score: m.score,
+          metadata: m.metadata
+        }))
+      }
+    });
+  } catch (error: any) {
+    console.error('[TestVectorize] Error:', error);
     return c.json({ success: false, error: error.message }, 500);
   }
 });
