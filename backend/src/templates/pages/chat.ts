@@ -322,12 +322,19 @@ export function chatPage({ apiBase, conversationCount = 0 }: ChatPageProps): str
         color: var(--primary);
       }
 
-      /* Tooltip */
+      .source-number {
+        font-weight: 600;
+        color: var(--primary);
+        min-width: 24px;
+        flex-shrink: 0;
+      }
+
+      /* Tooltip - interactive, stays visible on hover */
       .source-tooltip {
         position: absolute;
         left: 0;
         bottom: 100%;
-        width: 320px;
+        width: 360px;
         max-width: 90vw;
         background: var(--surface);
         border: 1px solid var(--border);
@@ -335,12 +342,31 @@ export function chatPage({ apiBase, conversationCount = 0 }: ChatPageProps): str
         padding: 0.75rem;
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         z-index: 1000;
-        display: none;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.15s, visibility 0.15s;
         margin-bottom: 0.5rem;
+        pointer-events: none;
       }
 
+      .source-item:hover .source-tooltip,
+      .source-tooltip:hover {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+      }
+
+      .source-item {
+        position: relative;
+      }
+
+      /* Keep tooltip visible when moving to it */
       .source-item:hover .source-tooltip {
-        display: block;
+        transition-delay: 0s;
+      }
+
+      .source-tooltip {
+        transition-delay: 0.1s;
       }
 
       .tooltip-header {
@@ -381,17 +407,38 @@ export function chatPage({ apiBase, conversationCount = 0 }: ChatPageProps): str
         margin-top: 0.5rem;
         padding-top: 0.5rem;
         border-top: 1px solid var(--border);
-        font-size: 0.7rem;
+        font-size: 0.75rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.375rem;
+      }
+
+      .tooltip-link {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
         color: var(--text-secondary);
-      }
-
-      .tooltip-footer a {
-        color: var(--primary);
         text-decoration: none;
+        padding: 0.25rem 0.5rem;
+        margin: 0 -0.5rem;
+        border-radius: 4px;
+        transition: all 0.15s;
       }
 
-      .tooltip-footer a:hover {
-        text-decoration: underline;
+      .tooltip-link:hover {
+        background: var(--primary-light);
+        color: var(--primary);
+      }
+
+      .tooltip-link-icon {
+        font-size: 0.875rem;
+      }
+
+      .tooltip-link-text {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
 
       .message.loading {
@@ -622,7 +669,7 @@ export function chatPage({ apiBase, conversationCount = 0 }: ChatPageProps): str
               html += \`
                 <div class="sources">
                   <div class="sources-title">Sources:</div>
-                  \${msg.sources.map(s => renderSource(s)).join('')}
+                  \${msg.sources.map((s, i) => renderSource(s, i + 1)).join('')}
                 </div>
               \`;
             }
@@ -702,7 +749,7 @@ export function chatPage({ apiBase, conversationCount = 0 }: ChatPageProps): str
             html += \`
               <div class="sources">
                 <div class="sources-title">Sources:</div>
-                \${sources.map(s => renderSource(s)).join('')}
+                \${sources.map((s, i) => renderSource(s, i + 1)).join('')}
               </div>
             \`;
           }
@@ -767,8 +814,9 @@ export function chatPage({ apiBase, conversationCount = 0 }: ChatPageProps): str
           return div.innerHTML;
         }
 
-        function renderSource(s) {
-          const url = s.url || s.link || '';
+        function renderSource(s, index) {
+          const originalUrl = s.url || '';
+          const dashboardUrl = API_BASE + '/dashboard/memories?id=' + s.id;
           const preview = escapeHtml(s.preview || '');
           const fullPreview = escapeHtml(s.preview || s.text || '');
           const similarity = s.similarity ? Math.round(s.similarity * 100) + '%' : '';
@@ -776,49 +824,47 @@ export function chatPage({ apiBase, conversationCount = 0 }: ChatPageProps): str
 
           // Determine icon based on type
           let icon = '📄';
-          if (type === 'tweet') icon = '🐦';
-          else if (type === 'youtube_video') icon = '📺';
-          else if (type === 'memory') icon = '🧠';
-          else if (type === 'post') icon = '📝';
+          let typeLabel = type;
+          if (type === 'tweet') { icon = '🐦'; typeLabel = 'Tweet'; }
+          else if (type === 'youtube_video') { icon = '📺'; typeLabel = 'Video'; }
+          else if (type === 'memory') { icon = '🧠'; typeLabel = 'Memory'; }
+          else if (type === 'post') { icon = '📝'; typeLabel = 'Post'; }
 
-          // Build tooltip
+          // Build tooltip with both links
           const tooltip = \`
             <div class="source-tooltip">
               <div class="tooltip-header">
-                <span class="tooltip-type">\${icon} \${type}</span>
+                <span class="tooltip-type">\${icon} \${typeLabel}</span>
                 <span class="tooltip-similarity">\${similarity} match</span>
               </div>
               <div class="tooltip-content">\${fullPreview}</div>
-              \${url ? \`
-                <div class="tooltip-footer">
-                  <a href="\${escapeHtml(url)}" target="_blank" rel="noopener">Open source ↗</a>
-                </div>
-              \` : ''}
+              <div class="tooltip-footer">
+                <a href="\${escapeHtml(dashboardUrl)}" class="tooltip-link">
+                  <span class="tooltip-link-icon">🧠</span>
+                  <span class="tooltip-link-text">View in Memory</span>
+                </a>
+                \${originalUrl ? \`
+                  <a href="\${escapeHtml(originalUrl)}" target="_blank" rel="noopener" class="tooltip-link">
+                    <span class="tooltip-link-icon">↗</span>
+                    <span class="tooltip-link-text">Open original: \${escapeHtml(originalUrl.substring(0, 40))}\${originalUrl.length > 40 ? '...' : ''}</span>
+                  </a>
+                \` : ''}
+              </div>
             </div>
           \`;
 
-          // Render clickable source with tooltip
-          if (url) {
-            return \`
-              <div class="source-item">
-                <a href="\${escapeHtml(url)}" target="_blank" rel="noopener" class="source-link">
-                  <span class="source-badge">\${icon} \${type}</span>
-                  <span class="source-preview">\${preview}</span>
-                </a>
-                \${tooltip}
-              </div>
-            \`;
-          } else {
-            return \`
-              <div class="source-item">
-                <div class="source-link">
-                  <span class="source-badge">\${icon} \${type}</span>
-                  <span class="source-preview">\${preview}</span>
-                </div>
-                \${tooltip}
-              </div>
-            \`;
-          }
+          // Render clickable source with number and tooltip
+          const primaryUrl = originalUrl || dashboardUrl;
+          return \`
+            <div class="source-item">
+              <span class="source-number">[\${index}]</span>
+              <a href="\${escapeHtml(primaryUrl)}" target="\${originalUrl ? '_blank' : '_self'}" rel="noopener" class="source-link">
+                <span class="source-badge">\${icon} \${typeLabel}</span>
+                <span class="source-preview">\${preview}</span>
+              </a>
+              \${tooltip}
+            </div>
+          \`;
         }
       })();
     </script>
