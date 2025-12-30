@@ -20,6 +20,7 @@ import claudeSessionsRoutes from './routes/claude-sessions';
 import exportRoutes from './routes/export';
 import tasksRoutes from './routes/tasks';
 import adminRoutes from './routes/admin';
+import chatRoutes from './routes/chat';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -181,6 +182,9 @@ app.route('/api/claude', claudeSessionsRoutes);
 
 // Admin routes (protected with X-Admin-Key header)
 app.route('/api/admin', adminRoutes);
+
+// Chat routes (RAG-powered conversations)
+app.route('/api/chat', chatRoutes);
 
 // 404 handler
 app.notFound((c) => {
