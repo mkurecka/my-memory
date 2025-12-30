@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { Env, Memory } from '../types';
 import { verifyJWT } from '../utils/jwt';
 import { generateId } from '../utils/id';
-import { deleteVector } from '../utils/embeddings';
+import { deleteVector, generateEmbedding, insertVector, EMBEDDING_MODEL } from '../utils/embeddings';
 
 const memory = new Hono<{ Bindings: Env }>();
 
@@ -40,10 +40,16 @@ memory.post('/', authMiddleware, async (c) => {
     const memoryId = generateId();
     const now = Date.now();
 
+    // Generate embedding for semantic search
+    let embedding: number[] | null = null;
+    if (c.env.AI) {
+      embedding = await generateEmbedding(c.env, text);
+    }
+
     await c.env.DB
       .prepare(`
-        INSERT INTO memory (id, user_id, text, context_json, tag, priority, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO memory (id, user_id, text, context_json, tag, priority, embedding_vector, embedding_model, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
       .bind(
         memoryId,
@@ -52,9 +58,21 @@ memory.post('/', authMiddleware, async (c) => {
         context ? JSON.stringify(context) : null,
         tag || null,
         priority,
+        embedding ? JSON.stringify(embedding) : null,
+        embedding ? EMBEDDING_MODEL : null,
         now
       )
       .run();
+
+    // Insert into Vectorize for semantic search
+    if (embedding && c.env.VECTORIZE) {
+      await insertVector(c.env, memoryId, embedding, {
+        user_id: userId,
+        table: 'memory',
+        type: 'memory'
+      });
+      console.log('[Memory] Created with embedding:', memoryId);
+    }
 
     return c.json({
       success: true,
@@ -193,6 +211,27 @@ memory.patch('/:id', authMiddleware, async (c) => {
       .prepare(`UPDATE memory SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`)
       .bind(...bindings)
       .run();
+
+    // If text was updated, regenerate embedding and update Vectorize
+    if (text && c.env.VECTORIZE) {
+      const embedding = await generateEmbedding(c.env, text);
+      if (embedding) {
+        // Update D1 with new embedding
+        await c.env.DB.prepare(
+          'UPDATE memory SET embedding_vector = ?, embedding_model = ? WHERE id = ?'
+        ).bind(JSON.stringify(embedding), EMBEDDING_MODEL, memoryId).run();
+
+        // Update Vectorize (upsert replaces existing vector)
+        await insertVector(c.env, memoryId, embedding, {
+          user_id: userId,
+          table: 'memory',
+          type: 'memory'
+        });
+        console.log('[Memory] Updated embedding for:', memoryId);
+      } else {
+        console.warn('[Memory] Failed to regenerate embedding for:', memoryId);
+      }
+    }
 
     return c.json({
       success: true,
