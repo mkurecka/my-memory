@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Env, Post } from '../types';
 import { verifyJWT } from '../utils/jwt';
+import { deleteVector } from '../utils/embeddings';
 
 const posts = new Hono<{ Bindings: Env }>();
 
@@ -174,6 +175,15 @@ posts.delete('/:id', authMiddleware, async (c) => {
         success: false,
         error: 'Post not found',
       }, 404);
+    }
+
+    // Also remove from Vectorize index
+    if (c.env.VECTORIZE) {
+      const vectorDeleted = await deleteVector(c.env, postId);
+      if (!vectorDeleted) {
+        console.warn('[Posts] Failed to delete vector for:', postId);
+        // Don't fail the request - D1 deletion was successful
+      }
     }
 
     return c.json({

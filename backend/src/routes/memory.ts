@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Env, Memory } from '../types';
 import { verifyJWT } from '../utils/jwt';
 import { generateId } from '../utils/id';
+import { deleteVector } from '../utils/embeddings';
 
 const memory = new Hono<{ Bindings: Env }>();
 
@@ -222,6 +223,15 @@ memory.delete('/:id', authMiddleware, async (c) => {
         success: false,
         error: 'Memory not found',
       }, 404);
+    }
+
+    // Also remove from Vectorize index
+    if (c.env.VECTORIZE) {
+      const vectorDeleted = await deleteVector(c.env, memoryId);
+      if (!vectorDeleted) {
+        console.warn('[Memory] Failed to delete vector for:', memoryId);
+        // Don't fail the request - D1 deletion was successful
+      }
     }
 
     return c.json({
