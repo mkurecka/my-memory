@@ -1,6 +1,7 @@
 // Generate unique IDs using crypto.randomUUID()
-export function generateId(): string {
-  return crypto.randomUUID();
+export function generateId(prefix?: string): string {
+  const uuid = crypto.randomUUID();
+  return prefix ? `${prefix}_${uuid}` : uuid;
 }
 
 // Generate short ID for display purposes

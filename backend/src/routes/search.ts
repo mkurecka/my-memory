@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { verifyJWT } from '../utils/jwt';
-import { generateEmbedding, semanticSearch, extractKeywords } from '../utils/embeddings';
+import { generateEmbedding, vectorSearch, semanticSearchLegacy, extractKeywords } from '../utils/embeddings';
 
 const search = new Hono<{ Bindings: Env }>();
 
@@ -26,11 +26,12 @@ async function authMiddleware(c: any, next: any) {
 /**
  * POST /api/search/semantic
  * Search saved content using semantic similarity
+ * Uses Vectorize for fast vector search, falls back to D1 if needed
  */
 search.post('/semantic', authMiddleware, async (c) => {
   try {
     const userId = c.get('userId');
-    const { query, table = 'posts', limit = 10, minSimilarity = 0.7 } = await c.req.json();
+    const { query, table = 'posts', limit = 10, minSimilarity = 0.7, useLegacy = false } = await c.req.json();
 
     if (!query || query.trim().length === 0) {
       return c.json({
@@ -39,16 +40,8 @@ search.post('/semantic', authMiddleware, async (c) => {
       }, 400);
     }
 
-    // Generate embedding for query
-    const apiKey = c.env.OPENROUTER_API_KEY;
-    if (!apiKey) {
-      return c.json({
-        success: false,
-        error: 'OpenRouter API key not configured'
-      }, 500);
-    }
-
-    const queryEmbedding = await generateEmbedding(query, apiKey);
+    // Generate embedding for query using Workers AI
+    const queryEmbedding = await generateEmbedding(c.env, query);
     if (!queryEmbedding) {
       return c.json({
         success: false,
@@ -56,8 +49,55 @@ search.post('/semantic', authMiddleware, async (c) => {
       }, 500);
     }
 
-    // Search using semantic similarity
-    const results = await semanticSearch(
+    // Use Vectorize for search if available, otherwise fall back to D1
+    if (c.env.VECTORIZE && !useLegacy) {
+      // Search using Vectorize
+      const vectorResults = await vectorSearch(c.env, queryEmbedding, userId, {
+        topK: limit,
+        minScore: minSimilarity,
+        table: table as 'posts' | 'memory'
+      });
+
+      // Fetch full records from D1 for matching IDs
+      if (vectorResults.length > 0) {
+        const ids = vectorResults.map(r => r.id);
+        const placeholders = ids.map(() => '?').join(',');
+
+        const sql = table === 'posts'
+          ? `SELECT id, type, original_text, generated_output, search_keywords, created_at, context_json
+             FROM posts WHERE id IN (${placeholders})`
+          : `SELECT id, text, context_json, search_keywords, created_at, tags
+             FROM memory WHERE id IN (${placeholders})`;
+
+        const dbResults = await c.env.DB.prepare(sql).bind(...ids).all();
+
+        // Merge with similarity scores
+        const resultsMap = new Map((dbResults.results || []).map((r: any) => [r.id, r]));
+        const results = vectorResults.map(vr => ({
+          ...resultsMap.get(vr.id),
+          similarity: vr.score
+        })).filter(r => r.id);
+
+        return c.json({
+          success: true,
+          query,
+          searchMethod: 'vectorize',
+          results,
+          count: results.length
+        });
+      }
+
+      return c.json({
+        success: true,
+        query,
+        searchMethod: 'vectorize',
+        results: [],
+        count: 0
+      });
+    }
+
+    // Legacy: Search using D1 with manual cosine similarity
+    const results = await semanticSearchLegacy(
       c.env,
       queryEmbedding,
       table as 'posts' | 'memory',
@@ -69,6 +109,7 @@ search.post('/semantic', authMiddleware, async (c) => {
     return c.json({
       success: true,
       query,
+      searchMethod: 'legacy',
       results: results.map(r => ({
         ...r,
         embedding_vector: undefined // Don't return full embedding

@@ -1,47 +1,45 @@
 /**
  * Embeddings utility for semantic search
- * Uses OpenRouter API to generate text embeddings
+ * Uses Cloudflare Workers AI for embedding generation
+ * Uses Cloudflare Vectorize for vector storage and search
  */
 
 import type { Env } from '../types';
 
+// Embedding model configuration
+export const EMBEDDING_MODEL = '@cf/baai/bge-base-en-v1.5';
+export const EMBEDDING_DIMENSIONS = 768;
+
+// Workers AI embedding response type
+interface EmbeddingResponse {
+  shape: number[];
+  data: number[][];
+}
+
 /**
- * Generate embeddings for text using OpenRouter API
- * Uses text-embedding-3-small model (1536 dimensions, $0.02 per 1M tokens)
+ * Generate embeddings for text using Cloudflare Workers AI
+ * Uses bge-base-en-v1.5 model (768 dimensions, FREE with Workers AI)
  */
-export async function generateEmbedding(text: string, apiKey: string): Promise<number[] | null> {
+export async function generateEmbedding(env: Env, text: string): Promise<number[] | null> {
   try {
     if (!text || text.trim().length === 0) {
+      return null;
+    }
+
+    if (!env.AI) {
+      console.error('[Embeddings] AI binding not available');
       return null;
     }
 
     // Truncate text to max 8000 characters to stay within token limits
     const truncatedText = text.substring(0, 8000);
 
-    const response = await fetch('https://openrouter.ai/api/v1/embeddings', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://text-processor-api.kureckamichal.workers.dev',
-        'X-Title': 'My Memory'
-      },
-      body: JSON.stringify({
-        model: 'openai/text-embedding-3-small',
-        input: truncatedText
-      })
-    });
+    const result = await env.AI.run(EMBEDDING_MODEL, {
+      text: [truncatedText]
+    }) as EmbeddingResponse;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[Embeddings] API error:', response.status, errorText);
-      return null;
-    }
-
-    const data = await response.json();
-
-    if (data.data && data.data[0] && data.data[0].embedding) {
-      return data.data[0].embedding;
+    if (result && result.data && result.data[0]) {
+      return result.data[0];
     }
 
     return null;
@@ -52,7 +50,132 @@ export async function generateEmbedding(text: string, apiKey: string): Promise<n
 }
 
 /**
- * Calculate cosine similarity between two vectors
+ * Generate embeddings for multiple texts in batch
+ */
+export async function generateEmbeddingsBatch(env: Env, texts: string[]): Promise<(number[] | null)[]> {
+  try {
+    if (!texts || texts.length === 0) {
+      return [];
+    }
+
+    if (!env.AI) {
+      console.error('[Embeddings] AI binding not available');
+      return texts.map(() => null);
+    }
+
+    // Truncate and filter texts
+    const truncatedTexts = texts
+      .map(t => t?.substring(0, 8000) || '')
+      .filter(t => t.trim().length > 0);
+
+    if (truncatedTexts.length === 0) {
+      return texts.map(() => null);
+    }
+
+    const result = await env.AI.run(EMBEDDING_MODEL, {
+      text: truncatedTexts
+    }) as EmbeddingResponse;
+
+    if (result && result.data) {
+      return result.data;
+    }
+
+    return texts.map(() => null);
+  } catch (error) {
+    console.error('[Embeddings] Error generating batch embeddings:', error);
+    return texts.map(() => null);
+  }
+}
+
+/**
+ * Insert a vector into Vectorize index
+ */
+export async function insertVector(
+  env: Env,
+  id: string,
+  embedding: number[],
+  metadata: Record<string, string>
+): Promise<boolean> {
+  try {
+    if (!env.VECTORIZE) {
+      console.error('[Embeddings] Vectorize binding not available');
+      return false;
+    }
+
+    await env.VECTORIZE.insert([{
+      id,
+      values: embedding,
+      metadata
+    }]);
+
+    return true;
+  } catch (error) {
+    console.error('[Embeddings] Error inserting vector:', error);
+    return false;
+  }
+}
+
+/**
+ * Delete a vector from Vectorize index
+ */
+export async function deleteVector(env: Env, id: string): Promise<boolean> {
+  try {
+    if (!env.VECTORIZE) {
+      console.error('[Embeddings] Vectorize binding not available');
+      return false;
+    }
+
+    await env.VECTORIZE.deleteByIds([id]);
+    return true;
+  } catch (error) {
+    console.error('[Embeddings] Error deleting vector:', error);
+    return false;
+  }
+}
+
+/**
+ * Search for similar vectors using Vectorize
+ */
+export async function vectorSearch(
+  env: Env,
+  queryEmbedding: number[],
+  userId: string,
+  options: {
+    topK?: number;
+    minScore?: number;
+    table?: 'posts' | 'memory';
+  } = {}
+): Promise<VectorizeMatch[]> {
+  try {
+    if (!env.VECTORIZE) {
+      console.error('[Embeddings] Vectorize binding not available');
+      return [];
+    }
+
+    const { topK = 10, minScore = 0.7, table } = options;
+
+    // Build filter for user_id and optional table
+    const filter: Record<string, string> = { user_id: userId };
+    if (table) {
+      filter.table = table;
+    }
+
+    const results = await env.VECTORIZE.query(queryEmbedding, {
+      topK,
+      filter,
+      returnMetadata: 'all'
+    });
+
+    // Filter by minimum score
+    return results.matches.filter(match => match.score >= minScore);
+  } catch (error) {
+    console.error('[Embeddings] Vector search error:', error);
+    return [];
+  }
+}
+
+/**
+ * Calculate cosine similarity between two vectors (legacy, for D1-based search)
  */
 export function cosineSimilarity(vecA: number[], vecB: number[]): number {
   if (vecA.length !== vecB.length) {
@@ -97,10 +220,10 @@ export function extractKeywords(text: string): string[] {
 }
 
 /**
- * Search for similar content using embeddings
- * Falls back to keyword search if embeddings not available
+ * Legacy: Search for similar content using D1 embeddings
+ * @deprecated Use vectorSearch with Vectorize instead
  */
-export async function semanticSearch(
+export async function semanticSearchLegacy(
   env: Env,
   queryEmbedding: number[],
   table: 'posts' | 'memory',

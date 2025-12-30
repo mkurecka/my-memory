@@ -23,6 +23,9 @@ export interface Env {
   // Service bindings
   HTML_TO_IMAGE_SERVICE?: Fetcher;
   TRANSCRIPT_SERVICE?: Fetcher;
+  // AI and Vector bindings
+  AI?: Ai;
+  VECTORIZE?: VectorizeIndex;
 }
 
 // User types

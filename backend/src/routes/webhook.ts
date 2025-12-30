@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { generateId } from '../utils/id';
-import { generateEmbedding, extractKeywords } from '../utils/embeddings';
+import { generateEmbedding, extractKeywords, insertVector, EMBEDDING_MODEL } from '../utils/embeddings';
 
 const router = new Hono<{ Bindings: Env }>();
 
@@ -207,18 +207,17 @@ async function saveTweetToDatabase(c: any, userId: string, data: any) {
   const text = tweetData.text || '';
   console.log('[saveTweetToDatabase] Extracted text:', text);
 
-  // Generate embedding and keywords for semantic search
-  const apiKey = c.env.OPENROUTER_API_KEY;
+  // Generate embedding and keywords for semantic search using Workers AI
   let embedding: number[] | null = null;
   let keywords: string[] = [];
 
-  if (apiKey && text) {
-    console.log('[saveTweetToDatabase] Generating embedding...');
-    embedding = await generateEmbedding(text, apiKey);
+  if (c.env.AI && text) {
+    console.log('[saveTweetToDatabase] Generating embedding with Workers AI...');
+    embedding = await generateEmbedding(c.env, text);
     keywords = extractKeywords(text);
     console.log('[saveTweetToDatabase] Embedding generated:', !!embedding, 'Keywords:', keywords.length);
   } else {
-    console.log('[saveTweetToDatabase] Skipping embedding (apiKey:', !!apiKey, 'text:', !!text, ')');
+    console.log('[saveTweetToDatabase] Skipping embedding (AI:', !!c.env.AI, 'text:', !!text, ')');
   }
 
   console.log('[saveTweetToDatabase] Inserting into posts table...');
@@ -240,13 +239,22 @@ async function saveTweetToDatabase(c: any, userId: string, data: any) {
     }),
     'completed',
     embedding ? JSON.stringify(embedding) : null,
-    embedding ? 'openai/text-embedding-3-small' : null,
+    embedding ? EMBEDDING_MODEL : null,
     keywords.length > 0 ? JSON.stringify(keywords) : null,
     Date.now()
   ).run();
 
+  // Insert into Vectorize for semantic search
+  if (embedding && c.env.VECTORIZE) {
+    await insertVector(c.env, postId, embedding, {
+      user_id: userId,
+      table: 'posts',
+      type: 'tweet'
+    });
+  }
+
   console.log('[saveTweetToDatabase] Insert result:', JSON.stringify(result));
-  console.log('[Webhook] Saved tweet to posts table:', postId, embedding ? '(with embedding)' : '(no embedding)');
+  console.log('[Webhook] Saved tweet to posts table:', postId, embedding ? '(with embedding + vectorize)' : '(no embedding)');
 }
 
 /**
@@ -260,13 +268,12 @@ async function saveYouTubeVideoToDatabase(c: any, userId: string, data: any) {
   const transcript = videoData.transcript?.text || '';
   const combinedText = `${title} ${description} ${transcript}`.trim();
 
-  // Generate embedding and keywords
-  const apiKey = c.env.OPENROUTER_API_KEY;
+  // Generate embedding and keywords using Workers AI
   let embedding: number[] | null = null;
   let keywords: string[] = [];
 
-  if (apiKey && combinedText) {
-    embedding = await generateEmbedding(combinedText, apiKey);
+  if (c.env.AI && combinedText) {
+    embedding = await generateEmbedding(c.env, combinedText);
     keywords = extractKeywords(combinedText);
   }
 
@@ -290,12 +297,21 @@ async function saveYouTubeVideoToDatabase(c: any, userId: string, data: any) {
     }),
     'completed',
     embedding ? JSON.stringify(embedding) : null,
-    embedding ? 'openai/text-embedding-3-small' : null,
+    embedding ? EMBEDDING_MODEL : null,
     keywords.length > 0 ? JSON.stringify(keywords) : null,
     Date.now()
   ).run();
 
-  console.log('[Webhook] Saved YouTube video to posts table:', postId, embedding ? '(with embedding)' : '(no embedding)');
+  // Insert into Vectorize for semantic search
+  if (embedding && c.env.VECTORIZE) {
+    await insertVector(c.env, postId, embedding, {
+      user_id: userId,
+      table: 'posts',
+      type: 'youtube_video'
+    });
+  }
+
+  console.log('[Webhook] Saved YouTube video to posts table:', postId, embedding ? '(with embedding + vectorize)' : '(no embedding)');
 }
 
 /**
@@ -305,13 +321,12 @@ async function saveMemoryToDatabase(c: any, userId: string, data: any) {
   const memoryId = generateId('mem');
   const text = data.text || '';
 
-  // Generate embedding and keywords
-  const apiKey = c.env.OPENROUTER_API_KEY;
+  // Generate embedding and keywords using Workers AI
   let embedding: number[] | null = null;
   let keywords: string[] = [];
 
-  if (apiKey && text) {
-    embedding = await generateEmbedding(text, apiKey);
+  if (c.env.AI && text) {
+    embedding = await generateEmbedding(c.env, text);
     keywords = extractKeywords(text);
   }
 
@@ -325,12 +340,21 @@ async function saveMemoryToDatabase(c: any, userId: string, data: any) {
     JSON.stringify(data.context || {}),
     'medium',
     embedding ? JSON.stringify(embedding) : null,
-    embedding ? 'openai/text-embedding-3-small' : null,
+    embedding ? EMBEDDING_MODEL : null,
     keywords.length > 0 ? JSON.stringify(keywords) : null,
     Date.now()
   ).run();
 
-  console.log('[Webhook] Saved to memory table:', memoryId, embedding ? '(with embedding)' : '(no embedding)');
+  // Insert into Vectorize for semantic search
+  if (embedding && c.env.VECTORIZE) {
+    await insertVector(c.env, memoryId, embedding, {
+      user_id: userId,
+      table: 'memory',
+      type: 'memory'
+    });
+  }
+
+  console.log('[Webhook] Saved to memory table:', memoryId, embedding ? '(with embedding + vectorize)' : '(no embedding)');
 }
 
 /**

@@ -47,6 +47,15 @@ service = "youtube-transcript-worker"
 
 # Custom Domain: memory.michalkurecka.cz (configured in Cloudflare Dashboard)
 
+# Vectorize - Vector database for semantic search
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "my-memory-index"
+
+# Workers AI - For embedding generation
+[ai]
+binding = "AI"
+
 # Observability
 [observability]
 enabled = true
