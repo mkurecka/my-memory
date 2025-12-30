@@ -19,6 +19,7 @@ import mobileRoutes from './routes/mobile';
 import claudeSessionsRoutes from './routes/claude-sessions';
 import exportRoutes from './routes/export';
 import tasksRoutes from './routes/tasks';
+import adminRoutes from './routes/admin';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -177,6 +178,9 @@ app.route('/api/mobile', mobileRoutes);
 
 // Claude Code sessions API
 app.route('/api/claude', claudeSessionsRoutes);
+
+// Admin routes (protected with X-Admin-Key header)
+app.route('/api/admin', adminRoutes);
 
 // 404 handler
 app.notFound((c) => {
