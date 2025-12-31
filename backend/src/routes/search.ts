@@ -1,27 +1,10 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
-import { verifyJWT } from '../utils/jwt';
 import { generateEmbedding, vectorSearch, semanticSearchLegacy, extractKeywords } from '../utils/embeddings';
+import { createAuthMiddleware } from '../utils/auth-middleware';
 
 const search = new Hono<{ Bindings: Env }>();
-
-// Authentication middleware
-async function authMiddleware(c: any, next: any) {
-  const authHeader = c.req.header('Authorization');
-  if (!authHeader) {
-    return c.json({ success: false, error: 'No authorization header' }, 401);
-  }
-
-  const token = authHeader.replace('Bearer ', '');
-  const payload = await verifyJWT(token, c.env.JWT_SECRET);
-
-  if (!payload) {
-    return c.json({ success: false, error: 'Invalid or expired token' }, 401);
-  }
-
-  c.set('userId', payload.userId);
-  await next();
-}
+const authMiddleware = createAuthMiddleware();
 
 /**
  * POST /api/search/semantic
