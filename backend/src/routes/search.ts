@@ -224,6 +224,23 @@ search.get('/recent', async (c) => {
     const searchQuery = c.req.query('q')?.trim(); // Text search query
     const tagFilter = c.req.query('tag')?.trim(); // Filter by tag (link, video, tweet)
 
+    // Date range filters (ISO date strings or timestamps)
+    const startDate = c.req.query('startDate');
+    const endDate = c.req.query('endDate');
+
+    // Convert date strings to timestamps
+    let startTimestamp: number | null = null;
+    let endTimestamp: number | null = null;
+
+    if (startDate) {
+      const parsed = Date.parse(startDate);
+      if (!isNaN(parsed)) startTimestamp = parsed;
+    }
+    if (endDate) {
+      const parsed = Date.parse(endDate);
+      if (!isNaN(parsed)) endTimestamp = parsed + 86400000; // Include full end day
+    }
+
     let sql: string;
     let bindings: any[];
 
@@ -239,6 +256,14 @@ search.get('/recent', async (c) => {
       if (searchQuery) {
         conditions.push('(event LIKE ? OR data_json LIKE ?)');
         bindings.push(`%${searchQuery}%`, `%${searchQuery}%`);
+      }
+      if (startTimestamp) {
+        conditions.push('created_at >= ?');
+        bindings.push(startTimestamp);
+      }
+      if (endTimestamp) {
+        conditions.push('created_at < ?');
+        bindings.push(endTimestamp);
       }
 
       const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
@@ -265,6 +290,14 @@ search.get('/recent', async (c) => {
       if (searchQuery) {
         conditions.push('(original_text LIKE ? OR generated_output LIKE ? OR context_json LIKE ?)');
         bindings.push(`%${searchQuery}%`, `%${searchQuery}%`, `%${searchQuery}%`);
+      }
+      if (startTimestamp) {
+        conditions.push('created_at >= ?');
+        bindings.push(startTimestamp);
+      }
+      if (endTimestamp) {
+        conditions.push('created_at < ?');
+        bindings.push(endTimestamp);
       }
 
       const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
@@ -297,6 +330,14 @@ search.get('/recent', async (c) => {
           conditions.push('tag = ?');
           bindings.push(tagFilter);
         }
+      }
+      if (startTimestamp) {
+        conditions.push('created_at >= ?');
+        bindings.push(startTimestamp);
+      }
+      if (endTimestamp) {
+        conditions.push('created_at < ?');
+        bindings.push(endTimestamp);
       }
 
       const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';

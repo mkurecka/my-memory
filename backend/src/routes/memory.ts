@@ -24,17 +24,72 @@ async function authMiddleware(c: any, next: any) {
   await next();
 }
 
+/**
+ * Generate a simple hash for deduplication
+ */
+function simpleHash(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return Math.abs(hash).toString(36);
+}
+
 // POST /api/memory - Create memory (auto-enriches URLs)
 memory.post('/', authMiddleware, async (c) => {
   try {
     const userId = c.get('userId');
-    const { text, context, tag, priority = 'medium' } = await c.req.json();
+    const { text, context, tag, priority = 'medium', skipDuplicateCheck = false } = await c.req.json();
 
     if (!text) {
       return c.json({
         success: false,
         error: 'Text is required',
       }, 400);
+    }
+
+    // Check for duplicates (by exact text match for URLs, or hash for longer content)
+    if (!skipDuplicateCheck) {
+      const trimmedText = text.trim();
+      const isUrl = /^https?:\/\/[^\s]+$/.test(trimmedText);
+
+      if (isUrl) {
+        // For URLs, check exact match
+        const existing = await c.env.DB.prepare(
+          'SELECT id FROM memory WHERE user_id = ? AND text = ? LIMIT 1'
+        ).bind(userId, trimmedText).first();
+
+        if (existing) {
+          console.log('[Memory] Duplicate URL detected:', trimmedText);
+          return c.json({
+            success: false,
+            error: 'This URL is already saved',
+            existingId: existing.id,
+            duplicate: true
+          }, 409);
+        }
+      } else if (text.length > 50) {
+        // For longer text, check by hash (stored in context_json)
+        const textHash = simpleHash(text);
+        const existing = await c.env.DB.prepare(
+          "SELECT id FROM memory WHERE user_id = ? AND context_json LIKE ? LIMIT 1"
+        ).bind(userId, `%"textHash":"${textHash}"%`).first();
+
+        if (existing) {
+          console.log('[Memory] Duplicate content detected (hash match)');
+          return c.json({
+            success: false,
+            error: 'Similar content already saved',
+            existingId: existing.id,
+            duplicate: true
+          }, 409);
+        }
+
+        // Add hash to context for future deduplication
+        context.textHash = textHash;
+      }
     }
 
     const memoryId = generateId();

@@ -63,8 +63,19 @@ router.post('/', async (c) => {
           case 'saveToMemory':
           case 'onSaveToMemory':
             console.log('[Webhook] Calling saveMemoryToDatabase...');
-            savedId = await saveMemoryToDatabase(c, userId, data);
-            savedType = 'memory';
+            const memoryResult = await saveMemoryToDatabase(c, userId, data);
+            savedId = memoryResult.memoryId;
+            savedType = memoryResult.isDuplicate ? 'duplicate' : 'memory';
+            // Trigger async URL enrichment if it's a NEW URL (not duplicate)
+            if (memoryResult.isUrl && memoryResult.urlType && !memoryResult.isDuplicate) {
+              console.log('[Webhook] Triggering async URL enrichment for:', savedId);
+              // Use waitUntil for background processing (non-blocking)
+              c.executionCtx.waitUntil(
+                enrichUrlMemory(c.env, memoryResult.memoryId, memoryResult.text, memoryResult.urlType)
+              );
+            } else if (memoryResult.isDuplicate) {
+              console.log('[Webhook] Skipping enrichment for duplicate:', savedId);
+            }
             break;
           case 'processText':
           case 'onProcessText':
@@ -158,6 +169,19 @@ router.post('/', async (c) => {
     }, 400);
   }
 });
+
+/**
+ * Simple hash function for deduplication
+ */
+function simpleHash(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return Math.abs(hash).toString(36);
+}
 
 /**
  * GET /api/webhook/health
@@ -341,17 +365,217 @@ function detectUrlType(url: string): 'youtube' | 'twitter' | 'webpage' {
 }
 
 /**
- * Helper function to save memory data to memory table
- * Returns the memoryId for potential enrichment
+ * Extract YouTube video ID from URL
  */
-async function saveMemoryToDatabase(c: any, userId: string, data: any): Promise<string> {
-  const memoryId = generateId('mem');
+function extractYouTubeVideoId(url: string): string | null {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+/**
+ * Enrich URL memory with extracted content (async, runs after save)
+ * Uses executionCtx.waitUntil for background processing
+ */
+async function enrichUrlMemory(env: any, memoryId: string, url: string, urlType: string): Promise<void> {
+  console.log('[Webhook] Enriching URL memory:', memoryId, urlType);
+
+  try {
+    let title = '';
+    let description = '';
+    let author = '';
+    let thumbnailUrl = '';
+    let transcript = '';
+    let combinedText = url;
+    const metadata: Record<string, any> = { url };
+
+    if (urlType === 'youtube') {
+      const videoId = extractYouTubeVideoId(url);
+      if (videoId) {
+        metadata.videoId = videoId;
+
+        // Fetch transcript if service available
+        if (env.TRANSCRIPT_SERVICE) {
+          try {
+            const transcriptResponse = await env.TRANSCRIPT_SERVICE.fetch(
+              `https://youtube-transcript-worker/transcript/${videoId}?lang=en`
+            );
+            if (transcriptResponse.ok) {
+              const data = await transcriptResponse.json() as any;
+              if (data.success && data.text) {
+                transcript = data.text;
+              }
+            }
+          } catch (e) {
+            console.warn('[Webhook] Transcript fetch failed:', e);
+          }
+        }
+
+        // Fetch oEmbed data
+        try {
+          const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
+          const oembedResponse = await fetch(oembedUrl);
+          if (oembedResponse.ok) {
+            const oembed = await oembedResponse.json() as any;
+            title = oembed.title || '';
+            author = oembed.author_name || '';
+            thumbnailUrl = oembed.thumbnail_url || '';
+          }
+        } catch (e) {
+          console.warn('[Webhook] YouTube oEmbed failed:', e);
+        }
+
+        combinedText = [title, description, transcript].filter(Boolean).join(' ').substring(0, 10000) || url;
+      }
+    } else if (urlType === 'twitter') {
+      // Try Twitter oEmbed
+      try {
+        const oembedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(url)}`;
+        const response = await fetch(oembedUrl);
+        if (response.ok) {
+          const oembed = await response.json() as any;
+          author = oembed.author_name || '';
+          const htmlText = oembed.html || '';
+          const textMatch = htmlText.match(/<p[^>]*>(.*?)<\/p>/i);
+          combinedText = textMatch ? textMatch[1].replace(/<[^>]*>/g, '') : url;
+          metadata.authorUrl = oembed.author_url;
+        }
+      } catch (e) {
+        console.warn('[Webhook] Twitter oEmbed failed:', e);
+      }
+    } else {
+      // Generic webpage extraction
+      try {
+        const response = await fetch(url, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; MyMemoryBot/1.0)' }
+        });
+        if (response.ok) {
+          const html = await response.text();
+          const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+          title = titleMatch ? titleMatch[1].trim() : '';
+
+          const descMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i);
+          description = descMatch ? descMatch[1].trim() : '';
+
+          const ogImageMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i);
+          if (ogImageMatch) thumbnailUrl = ogImageMatch[1];
+
+          // Extract main content
+          const articleMatch = html.match(/<article[^>]*>([\s\S]*?)<\/article>/i) ||
+                               html.match(/<main[^>]*>([\s\S]*?)<\/main>/i);
+          if (articleMatch) {
+            const cleanText = articleMatch[1]
+              .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+              .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+              .replace(/<[^>]+>/g, ' ')
+              .replace(/\s+/g, ' ')
+              .trim()
+              .substring(0, 8000);
+            combinedText = [title, description, cleanText].filter(Boolean).join(' ') || url;
+          } else {
+            combinedText = [title, description].filter(Boolean).join(' ') || url;
+          }
+        }
+      } catch (e) {
+        console.warn('[Webhook] Webpage fetch failed:', e);
+      }
+    }
+
+    // Update memory with enriched content
+    const context = {
+      url,
+      type: urlType,
+      title,
+      description,
+      author,
+      thumbnailUrl,
+      hasTranscript: !!transcript,
+      enrichedAt: new Date().toISOString(),
+      ...metadata
+    };
+
+    // Generate new embedding for enriched text
+    let embedding: number[] | null = null;
+    if (env.AI && combinedText !== url) {
+      embedding = await generateEmbedding(env, combinedText);
+    }
+
+    // Update D1
+    await env.DB.prepare(`
+      UPDATE memory
+      SET text = ?, context_json = ?, embedding_vector = ?, embedding_model = ?
+      WHERE id = ?
+    `).bind(
+      combinedText.substring(0, 10000),
+      JSON.stringify(context),
+      embedding ? JSON.stringify(embedding) : null,
+      embedding ? EMBEDDING_MODEL : null,
+      memoryId
+    ).run();
+
+    // Update Vectorize
+    if (embedding && env.VECTORIZE) {
+      await insertVector(env, memoryId, embedding, {
+        user_id: 'default_user',
+        table: 'memory',
+        type: urlType
+      });
+    }
+
+    console.log('[Webhook] URL enriched:', memoryId, 'title:', title?.substring(0, 50), embedding ? '(with embedding)' : '');
+  } catch (error) {
+    console.error('[Webhook] URL enrichment failed:', error);
+  }
+}
+
+/**
+ * Helper function to save memory data to memory table
+ * Returns { memoryId, isUrl, urlType } for potential enrichment
+ */
+async function saveMemoryToDatabase(c: any, userId: string, data: any): Promise<{ memoryId: string; isUrl: boolean; urlType: string | null; text: string; isDuplicate?: boolean }> {
   const text = data.text || '';
 
   // Detect if this is a URL and set appropriate tag
   const isUrlMemory = isUrl(text);
   const urlType = isUrlMemory ? detectUrlType(text) : null;
   const tag = data.context?.type === 'link' || isUrlMemory ? 'link' : (data.tag || null);
+
+  // Check for duplicates - URLs are matched exactly, text is matched by hash
+  const skipDuplicateCheck = data.skipDuplicateCheck === true;
+  if (!skipDuplicateCheck) {
+    if (isUrlMemory) {
+      // For URLs, check for exact text match
+      const existing = await c.env.DB.prepare(
+        'SELECT id FROM memory WHERE user_id = ? AND text = ? LIMIT 1'
+      ).bind(userId, text).first();
+
+      if (existing) {
+        console.log('[Webhook] Duplicate URL detected:', text, 'existing:', existing.id);
+        return { memoryId: existing.id as string, isUrl: isUrlMemory, urlType, text, isDuplicate: true };
+      }
+    } else if (text.length > 50) {
+      // For longer text, check for similar content using hash
+      const hash = simpleHash(text);
+      const recentMemories = await c.env.DB.prepare(
+        'SELECT id, text FROM memory WHERE user_id = ? AND created_at > ? LIMIT 100'
+      ).bind(userId, Date.now() - 24 * 60 * 60 * 1000).all();
+
+      for (const mem of recentMemories.results || []) {
+        if (simpleHash(mem.text as string) === hash) {
+          console.log('[Webhook] Duplicate text detected (hash match):', mem.id);
+          return { memoryId: mem.id as string, isUrl: false, urlType: null, text, isDuplicate: true };
+        }
+      }
+    }
+  }
+
+  const memoryId = generateId('mem');
 
   // Generate embedding and keywords using Workers AI
   let embedding: number[] | null = null;
@@ -394,7 +618,7 @@ async function saveMemoryToDatabase(c: any, userId: string, data: any): Promise<
   }
 
   console.log('[Webhook] Saved to memory table:', memoryId, tag ? `(tag: ${tag})` : '', embedding ? '(with embedding + vectorize)' : '(no embedding)');
-  return memoryId;
+  return { memoryId, isUrl: isUrlMemory, urlType, text };
 }
 
 /**
