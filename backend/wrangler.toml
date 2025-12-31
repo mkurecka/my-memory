@@ -32,7 +32,7 @@ APP_URL = "https://my-memory.kureckamichal.workers.dev"
 AIRTABLE_PROFILES_TABLE = "Brand Profiles" # Table name for brand profiles
 AIRTABLE_WEBSITES_TABLE = "Content Generations" # Table name for content generations
 HTML_TO_IMAGE_WORKER_URL = "https://html-to-image-worker.kureckamichal.workers.dev/render"
-N8N_WEBHOOK_URL = "https://n8n-mkurecka.up.railway.app/webhook/post-scraper"
+N8N_WEBHOOK_URL = "https://n8n.michalkurecka.cz/webhook/post-scraper"
 # Note: OPENROUTER_API_KEY and HTML_TO_IMAGE_WORKER_API_KEY are set as secrets via Cloudflare Dashboard
 # Do not add them here as environment variables or they will override the secrets
 
