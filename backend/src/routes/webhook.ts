@@ -3,6 +3,7 @@ import type { Env } from '../types';
 import { generateId } from '../utils/id';
 import { generateEmbedding, extractKeywords, insertVector, EMBEDDING_MODEL } from '../utils/embeddings';
 import { isUrl, detectUrlType, enrichUrlMemory } from '../utils/url';
+import { simpleHash, ensureUserExists } from '../utils/helpers';
 
 const router = new Hono<{ Bindings: Env }>();
 
@@ -171,18 +172,6 @@ router.post('/', async (c) => {
   }
 });
 
-/**
- * Simple hash function for deduplication
- */
-function simpleHash(str: string): string {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
-  }
-  return Math.abs(hash).toString(36);
-}
 
 /**
  * GET /api/webhook/health
@@ -196,36 +185,6 @@ router.get('/health', (c) => {
   });
 });
 
-/**
- * Ensure user exists in database (create guest user if needed)
- */
-async function ensureUserExists(c: any, userId: string) {
-  try {
-    // Check if user exists
-    const existingUser = await c.env.DB.prepare(
-      'SELECT id FROM users WHERE id = ?'
-    ).bind(userId).first();
-
-    if (!existingUser) {
-      // Create guest user (no email/password, just for data storage)
-      await c.env.DB.prepare(
-        `INSERT INTO users (id, email, password_hash, created_at, subscription_tier)
-         VALUES (?, ?, ?, ?, ?)`
-      ).bind(
-        userId,
-        `guest_${userId}@extension.local`, // Placeholder email
-        'guest', // Placeholder password hash
-        Date.now(),
-        'free'
-      ).run();
-
-      console.log('[Webhook] Created guest user:', userId);
-    }
-  } catch (error) {
-    console.error('[Webhook] Error ensuring user exists:', error);
-    throw error; // Re-throw to prevent saving data without user
-  }
-}
 
 /**
  * Helper function to save tweet data to posts table

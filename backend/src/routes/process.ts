@@ -1,11 +1,12 @@
 import { Hono } from 'hono';
 import type { Env, ProcessTextRequest, ProcessImageRequest, ProcessResponse } from '../types';
 import { verifyJWT } from '../utils/jwt';
+import { authMiddleware as baseAuthMiddleware } from '../utils/auth';
 import { generateId } from '../utils/id';
 
 const process = new Hono<{ Bindings: Env }>();
 
-// Authentication middleware
+// Extended authentication middleware that also sets email and tier
 async function authMiddleware(c: any, next: any) {
   const authHeader = c.req.header('Authorization');
   if (!authHeader) {

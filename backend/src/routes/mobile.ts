@@ -7,6 +7,7 @@ import { Hono } from 'hono';
 import type { Env } from '../types';
 import { generateId } from '../utils/id';
 import { isUrl, detectUrlType, enrichUrlMemory } from '../utils/url';
+import { ensureUserExists } from '../utils/helpers';
 
 const router = new Hono<{ Bindings: Env }>();
 
@@ -582,27 +583,5 @@ router.get('/health', (c) => {
     ]
   });
 });
-
-/**
- * Ensure user exists in database
- */
-async function ensureUserExists(c: any, userId: string) {
-  const existing = await c.env.DB.prepare(
-    'SELECT id FROM users WHERE id = ?'
-  ).bind(userId).first();
-
-  if (!existing) {
-    await c.env.DB.prepare(`
-      INSERT INTO users (id, email, password_hash, created_at, subscription_tier)
-      VALUES (?, ?, ?, ?, ?)
-    `).bind(
-      userId,
-      `${userId}@mobile.local`,
-      'mobile',
-      Date.now(),
-      'free'
-    ).run();
-  }
-}
 
 export default router;

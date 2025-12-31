@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
+import { verifyJWT } from '../utils/jwt';
 import { generateEmbedding, vectorSearch, semanticSearchLegacy, extractKeywords } from '../utils/embeddings';
 import { createAuthMiddleware } from '../utils/auth-middleware';
 

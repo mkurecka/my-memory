@@ -1,27 +1,9 @@
 import { Hono } from 'hono';
 import type { Env, VisualContent, VisualContentImage, VisualContentMetadata, CreateVisualContentRequest, ImageType } from '../types';
-import { verifyJWT } from '../utils/jwt';
+import { authMiddleware } from '../utils/auth';
 import { generateId } from '../utils/id';
 
 const visualContent = new Hono<{ Bindings: Env }>();
-
-// Authentication middleware
-async function authMiddleware(c: any, next: any) {
-  const authHeader = c.req.header('Authorization');
-  if (!authHeader) {
-    return c.json({ success: false, error: 'No authorization header' }, 401);
-  }
-
-  const token = authHeader.replace('Bearer ', '');
-  const payload = await verifyJWT(token, c.env.JWT_SECRET);
-
-  if (!payload) {
-    return c.json({ success: false, error: 'Invalid or expired token' }, 401);
-  }
-
-  c.set('userId', payload.userId);
-  await next();
-}
 
 // Image type specifications
 const IMAGE_SPECS: Record<ImageType, { width: number; height: number; name: string }> = {

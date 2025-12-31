@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { generateEmbedding, insertVector, EMBEDDING_MODEL } from '../utils/embeddings';
-import { detectUrlType, extractYouTubeVideoId } from '../utils/url';
+import { detectUrlType } from '../utils/url';
+import { extractYouTubeContent, extractTwitterContent, extractWebpageContent } from '../utils/content-extraction';
 
 const router = new Hono<{ Bindings: Env }>();
 
@@ -494,7 +495,7 @@ router.post('/enrich-url-memories', async (c) => {
   }
 
   try {
-    const { batchSize = 10, offset = 0, parallel = false } = await c.req.json().catch(() => ({}));
+    const { batchSize = 10, offset = 0 } = await c.req.json().catch(() => ({}));
 
     // Find memories that look like URL-only (text starts with http and is short like a URL)
     // Re-process if content is still just the URL (length < 200 chars)
@@ -702,157 +703,5 @@ router.get('/url-memories-status', async (c) => {
     return c.json({ success: false, error: error.message }, 500);
   }
 });
-
-// URL helpers (detectUrlType, extractYouTubeVideoId) imported from ../utils/url
-
-async function extractYouTubeContent(env: any, url: string): Promise<{
-  title?: string;
-  description?: string;
-  text: string;
-  transcript?: string;
-  author?: string;
-  thumbnailUrl?: string;
-  metadata?: Record<string, any>;
-} | null> {
-  const videoId = extractYouTubeVideoId(url);
-  if (!videoId) return null;
-
-  try {
-    const transcriptService = env.TRANSCRIPT_SERVICE;
-    let transcript = '';
-
-    if (transcriptService) {
-      const transcriptResponse = await transcriptService.fetch(
-        `https://youtube-transcript-worker/transcript/${videoId}?lang=en`
-      );
-      if (transcriptResponse.ok) {
-        const data = await transcriptResponse.json() as any;
-        if (data.success && data.text) {
-          transcript = data.text;
-        }
-      }
-    }
-
-    // Fetch metadata via oEmbed
-    let title = '';
-    let author = '';
-    let thumbnailUrl = '';
-
-    try {
-      const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
-      const oembedResponse = await fetch(oembedUrl);
-      if (oembedResponse.ok) {
-        const oembed = await oembedResponse.json() as any;
-        title = oembed.title || '';
-        author = oembed.author_name || '';
-        thumbnailUrl = oembed.thumbnail_url || '';
-      }
-    } catch (e) { /* ignore */ }
-
-    return {
-      title,
-      author,
-      thumbnailUrl,
-      text: title || url,
-      transcript,
-      metadata: { videoId, url: `https://www.youtube.com/watch?v=${videoId}` }
-    };
-  } catch (error) {
-    console.error('[Admin] YouTube extraction error:', error);
-    return { text: url, metadata: { videoId } };
-  }
-}
-
-async function extractTwitterContent(url: string): Promise<{
-  title?: string;
-  description?: string;
-  text: string;
-  author?: string;
-  metadata?: Record<string, any>;
-} | null> {
-  try {
-    const oembedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(url)}`;
-    const response = await fetch(oembedUrl);
-
-    if (response.ok) {
-      const oembed = await response.json() as any;
-      const htmlText = oembed.html || '';
-      const textMatch = htmlText.match(/<p[^>]*>(.*?)<\/p>/i);
-      const tweetText = textMatch ? textMatch[1].replace(/<[^>]*>/g, '') : '';
-
-      return {
-        text: tweetText || url,
-        author: oembed.author_name,
-        metadata: { authorUrl: oembed.author_url, url }
-      };
-    }
-  } catch (e) { /* ignore */ }
-
-  return { text: url, metadata: { url } };
-}
-
-async function extractWebpageContent(url: string): Promise<{
-  title?: string;
-  description?: string;
-  text: string;
-  author?: string;
-  metadata?: Record<string, any>;
-} | null> {
-  try {
-    const response = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; MyMemoryBot/1.0)' }
-    });
-
-    if (!response.ok) return null;
-
-    const html = await response.text();
-
-    // Extract title
-    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-    const title = titleMatch ? titleMatch[1].trim() : '';
-
-    // Extract meta description
-    const descMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i) ||
-                      html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*name=["']description["']/i);
-    const description = descMatch ? descMatch[1].trim() : '';
-
-    // Extract Open Graph data
-    const ogTitleMatch = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i);
-    const ogDescMatch = html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i);
-    const ogImageMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i);
-
-    // Extract article content
-    let mainText = '';
-    const articleMatch = html.match(/<article[^>]*>([\s\S]*?)<\/article>/i);
-    if (articleMatch) {
-      mainText = articleMatch[1];
-    } else {
-      const mainMatch = html.match(/<main[^>]*>([\s\S]*?)<\/main>/i);
-      if (mainMatch) mainText = mainMatch[1];
-    }
-
-    // Clean HTML
-    const cleanText = mainText
-      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .substring(0, 8000);
-
-    const finalTitle = ogTitleMatch?.[1] || title;
-    const finalDesc = ogDescMatch?.[1] || description;
-
-    return {
-      title: finalTitle,
-      description: finalDesc,
-      text: cleanText || finalDesc || finalTitle || url,
-      metadata: { url, ogImage: ogImageMatch?.[1] }
-    };
-  } catch (error) {
-    console.error('[Admin] Webpage extraction error:', error);
-    return null;
-  }
-}
 
 export default router;

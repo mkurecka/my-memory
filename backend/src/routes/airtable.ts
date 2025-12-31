@@ -35,7 +35,8 @@ async function optionalAuthMiddleware(c: any, next: any) {
 /**
  * Required authentication middleware (for write operations)
  */
-async function requireAuthMiddleware(c: any, next: any) {
+// Reserved for future use - write operations requiring auth
+async function _requireAuthMiddleware(c: any, next: any) {
   const authHeader = c.req.header('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
     return c.json({

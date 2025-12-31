@@ -1,27 +1,9 @@
 import { Hono } from 'hono';
 import type { Env, Post } from '../types';
-import { verifyJWT } from '../utils/jwt';
+import { authMiddleware } from '../utils/auth';
 import { deleteVector } from '../utils/embeddings';
 
 const posts = new Hono<{ Bindings: Env }>();
-
-// Authentication middleware
-async function authMiddleware(c: any, next: any) {
-  const authHeader = c.req.header('Authorization');
-  if (!authHeader) {
-    return c.json({ success: false, error: 'No authorization header' }, 401);
-  }
-
-  const token = authHeader.replace('Bearer ', '');
-  const payload = await verifyJWT(token, c.env.JWT_SECRET);
-
-  if (!payload) {
-    return c.json({ success: false, error: 'Invalid or expired token' }, 401);
-  }
-
-  c.set('userId', payload.userId);
-  await next();
-}
 
 // GET /api/posts - List all posts
 posts.get('/', authMiddleware, async (c) => {

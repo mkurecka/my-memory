@@ -1,26 +1,8 @@
 import { Hono } from 'hono';
 import type { Env, UserSettings } from '../types';
-import { verifyJWT } from '../utils/jwt';
+import { authMiddleware } from '../utils/auth';
 
 const settings = new Hono<{ Bindings: Env }>();
-
-// Authentication middleware
-async function authMiddleware(c: any, next: any) {
-  const authHeader = c.req.header('Authorization');
-  if (!authHeader) {
-    return c.json({ success: false, error: 'No authorization header' }, 401);
-  }
-
-  const token = authHeader.replace('Bearer ', '');
-  const payload = await verifyJWT(token, c.env.JWT_SECRET);
-
-  if (!payload) {
-    return c.json({ success: false, error: 'Invalid or expired token' }, 401);
-  }
-
-  c.set('userId', payload.userId);
-  await next();
-}
 
 // GET /api/settings - Get user settings
 settings.get('/', authMiddleware, async (c) => {
