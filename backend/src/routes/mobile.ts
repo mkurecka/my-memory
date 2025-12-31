@@ -6,11 +6,129 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { generateId } from '../utils/id';
+import { generateEmbedding, extractKeywords, insertVector, EMBEDDING_MODEL } from '../utils/embeddings';
 
 const router = new Hono<{ Bindings: Env }>();
 
 // Default user for mobile saves (can be customized via header)
 const DEFAULT_MOBILE_USER = 'mobile_user';
+
+/**
+ * URL detection helpers
+ */
+function isUrl(text: string): boolean {
+  const trimmed = text.trim();
+  return /^https?:\/\/[^\s]+$/.test(trimmed) ||
+         /^[a-zA-Z0-9][-a-zA-Z0-9]*\.[a-zA-Z]{2,}(\/[^\s]*)?$/.test(trimmed);
+}
+
+function detectUrlType(url: string): 'youtube' | 'twitter' | 'webpage' {
+  const lower = url.toLowerCase();
+  if (lower.includes('youtube.com') || lower.includes('youtu.be')) return 'youtube';
+  if (lower.includes('twitter.com') || lower.includes('x.com')) return 'twitter';
+  return 'webpage';
+}
+
+function extractYouTubeVideoId(url: string): string | null {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+/**
+ * Async URL enrichment (runs in background via waitUntil)
+ */
+async function enrichUrlMemory(env: Env, memoryId: string, url: string, urlType: string): Promise<void> {
+  console.log('[Mobile] Starting URL enrichment for:', memoryId, urlType);
+
+  try {
+    let enrichedData: any = { url, type: urlType };
+    let fullContent = url;
+
+    if (urlType === 'youtube') {
+      const videoId = extractYouTubeVideoId(url);
+      if (videoId && env.TRANSCRIPT_SERVICE) {
+        try {
+          const transcriptResponse = await env.TRANSCRIPT_SERVICE.fetch(
+            new Request(`https://transcript-worker/transcript/${videoId}`, { method: 'GET' })
+          );
+          if (transcriptResponse.ok) {
+            const transcriptData = await transcriptResponse.json() as any;
+            enrichedData.videoId = videoId;
+            enrichedData.title = transcriptData.title;
+            enrichedData.channelName = transcriptData.channelName;
+            enrichedData.hasTranscript = !!transcriptData.transcript;
+            if (transcriptData.transcript) {
+              fullContent = `${transcriptData.title || ''}\n${transcriptData.channelName || ''}\n${transcriptData.transcript}`;
+            }
+          }
+        } catch (e) {
+          console.log('[Mobile] YouTube transcript fetch failed:', e);
+        }
+      }
+    } else if (urlType === 'webpage') {
+      try {
+        const response = await fetch(url, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; MyMemoryBot/1.0)' },
+          redirect: 'follow'
+        });
+        if (response.ok) {
+          const html = await response.text();
+          const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+          const descMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i) ||
+                           html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*name=["']description["']/i);
+          const ogImageMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i);
+
+          enrichedData.title = titleMatch ? titleMatch[1].trim() : null;
+          enrichedData.description = descMatch ? descMatch[1].trim() : null;
+          enrichedData.thumbnailUrl = ogImageMatch ? ogImageMatch[1] : null;
+
+          if (enrichedData.title || enrichedData.description) {
+            fullContent = `${enrichedData.title || ''}\n${enrichedData.description || ''}\n${url}`;
+          }
+        }
+      } catch (e) {
+        console.log('[Mobile] Webpage fetch failed:', e);
+      }
+    }
+
+    enrichedData.enrichedAt = new Date().toISOString();
+
+    // Update the memory with enriched data
+    await env.DB.prepare(
+      'UPDATE memory SET text = ?, context_json = ?, tag = ? WHERE id = ?'
+    ).bind(fullContent, JSON.stringify(enrichedData), 'link', memoryId).run();
+
+    // Generate embedding for the enriched content
+    if (env.AI && fullContent.length > 10) {
+      const embedding = await generateEmbedding(env, fullContent);
+      if (embedding) {
+        const keywords = extractKeywords(fullContent);
+        await env.DB.prepare(
+          'UPDATE memory SET embedding_vector = ?, embedding_model = ?, search_keywords = ? WHERE id = ?'
+        ).bind(JSON.stringify(embedding), EMBEDDING_MODEL, JSON.stringify(keywords), memoryId).run();
+
+        if (env.VECTORIZE) {
+          await insertVector(env, memoryId, embedding, {
+            user_id: 'mobile_user',
+            table: 'memory',
+            type: 'link'
+          });
+        }
+      }
+    }
+
+    console.log('[Mobile] URL enrichment completed for:', memoryId);
+  } catch (error) {
+    console.error('[Mobile] URL enrichment error:', error);
+  }
+}
 
 /**
  * POST /api/mobile/save-text
@@ -520,31 +638,48 @@ async function saveYouTubeFromUrl(c: any, userId: string, url: string) {
 
 /**
  * Save as memory/text
+ * Detects URLs and triggers async enrichment
  */
 async function saveAsMemory(c: any, userId: string, text: string) {
   const memoryId = generateId('mem');
+  const trimmedText = text.trim();
+
+  // Check if this is a URL
+  const isUrlContent = isUrl(trimmedText);
+  const urlType = isUrlContent ? detectUrlType(trimmedText) : null;
+
   const contextJson = JSON.stringify({
     savedFrom: 'ios_shortcut',
-    savedAt: new Date().toISOString()
+    savedAt: new Date().toISOString(),
+    ...(isUrlContent && { url: trimmedText, urlType })
   });
 
+  // Set tag='link' if it's a URL for proper filtering
   await c.env.DB.prepare(`
-    INSERT INTO memory (id, user_id, text, context_json, created_at)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO memory (id, user_id, text, context_json, tag, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)
   `).bind(
     memoryId,
     userId,
     text,
     contextJson,
+    isUrlContent ? 'link' : null,
     Date.now()
   ).run();
 
+  // Trigger async URL enrichment if it's a URL
+  if (isUrlContent) {
+    console.log('[Mobile] Detected URL, triggering enrichment:', urlType);
+    c.executionCtx.waitUntil(enrichUrlMemory(c.env, memoryId, trimmedText, urlType!));
+  }
+
   return c.json({
     success: true,
-    message: '💾 Text saved!',
-    type: 'memory',
+    message: isUrlContent ? '🔗 Link saved!' : '💾 Text saved!',
+    type: isUrlContent ? 'link' : 'memory',
     id: memoryId,
-    preview: text.substring(0, 100) + (text.length > 100 ? '...' : '')
+    preview: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
+    ...(isUrlContent && { urlType, enriching: true })
   });
 }
 
