@@ -1,11 +1,12 @@
-# Universal Text Processor - Technical Reference
+# My Memory - Technical Reference
 
 ## Project Overview
 
-Full-stack text processing application with browser extension frontend and Cloudflare Workers backend.
+Personal memory and content management system with browser extension, Cloudflare Workers backend, and AI-powered semantic search.
 
 **Repository**: https://github.com/mkurecka/x-post-sender
-**Deployed Backend**: https://text-processor-api.kureckamichal.workers.dev
+**Deployed Backend**: https://my-memory.kureckamichal.workers.dev
+**Custom Domain**: memory.michalkurecka.cz
 **Extension ID**: epjggaaoglehneiflbfpkfghikblkjom
 
 ## Architecture
@@ -13,43 +14,66 @@ Full-stack text processing application with browser extension frontend and Cloud
 ### Monorepo Structure
 
 ```
-universal-text-processor/
+my-memory/
 ├── backend/              # Cloudflare Workers backend
 │   ├── src/
 │   │   ├── index.ts                 # Main Hono app, CORS, routes
-│   │   ├── routes/
+│   │   ├── routes/                  # API route handlers (18 files)
+│   │   │   ├── admin.ts             # Admin & migration endpoints
+│   │   │   ├── airtable.ts          # Airtable integration
 │   │   │   ├── auth.ts              # JWT authentication
+│   │   │   ├── chat.ts              # Chat/RAG with memories
+│   │   │   ├── claude-sessions.ts   # Claude Code session tracking
+│   │   │   ├── dashboard.ts         # Dashboard page routing
+│   │   │   ├── export.ts            # Data export endpoints
 │   │   │   ├── memory.ts            # Memory storage endpoints
+│   │   │   ├── mobile.ts            # Mobile-optimized endpoints
 │   │   │   ├── posts.ts             # Posts management
-│   │   │   ├── process.ts           # Text processing
-│   │   │   └── settings.ts          # User settings
+│   │   │   ├── process.ts           # Text/image processing
+│   │   │   ├── proxy.ts             # External API proxy
+│   │   │   ├── search.ts            # Semantic & keyword search
+│   │   │   ├── settings.ts          # User settings
+│   │   │   ├── tasks.ts             # Task management
+│   │   │   ├── ui.ts                # UI components
+│   │   │   ├── visual-content.ts    # Visual content generation
+│   │   │   └── webhook.ts           # Webhook handling
+│   │   ├── templates/
+│   │   │   ├── layout.ts            # Base HTML layout
+│   │   │   └── pages/               # Dashboard pages (17 files)
+│   │   │       ├── add-content.ts   # Add memory/tweet/video/url
+│   │   │       ├── ai-content.ts    # AI-generated content
+│   │   │       ├── ai-images.ts     # AI image gallery
+│   │   │       ├── all-content.ts   # All content view
+│   │   │       ├── chat.ts          # Chat with memories
+│   │   │       ├── claude-sessions.ts # Session history
+│   │   │       ├── dashboard.ts     # Main dashboard
+│   │   │       ├── generate-carousel.ts # Carousel generator
+│   │   │       ├── generate-image.ts # Image generator
+│   │   │       ├── memories.ts      # Memories list
+│   │   │       ├── memories-unified.ts # Unified view
+│   │   │       ├── profiles.ts      # Brand profiles
+│   │   │       ├── settings.ts      # Settings page
+│   │   │       ├── tasks.ts         # Task management
+│   │   │       ├── tweets.ts        # Saved tweets
+│   │   │       ├── videos.ts        # Saved videos
+│   │   │       └── webhooks.ts      # Webhook config
 │   │   ├── types/
 │   │   │   └── index.ts             # TypeScript interfaces
 │   │   └── utils/
 │   │       ├── crypto.ts            # Encryption utilities
+│   │       ├── embeddings.ts        # Vector embeddings & search
 │   │       ├── id.ts                # ID generation
 │   │       └── jwt.ts               # JWT utilities
-│   ├── migrations/
-│   │   └── 0001_initial_schema.sql  # D1 database schema
+│   ├── migrations/                  # D1 database migrations
 │   ├── wrangler.toml                # Cloudflare configuration
-│   ├── package.json                 # Dependencies
-│   └── tsconfig.json                # TypeScript config
+│   └── package.json                 # Dependencies
 │
 └── extension/            # Chrome Extension (Manifest V3)
-    ├── background.js             # Service worker, message handlers
+    ├── background.js             # Service worker
     ├── content.js                # FAB, text selection, UI
     ├── api-client.js             # Backend API communication
     ├── settings-manager.js       # Settings management
-    ├── template-generators.js    # Visual content HTML generators
-    ├── manifest.json             # Extension configuration
-    ├── settings.json             # Default settings, profiles
-    ├── styles.css                # Extension UI styles
-    ├── package.json              # Dev dependencies (ESLint, TypeScript)
-    ├── tsconfig.json             # TypeScript config for type checking
-    ├── .eslintrc.json            # ESLint rules
-    └── types/                    # TypeScript type definitions
-        ├── api.d.ts              # API response types
-        └── chrome.d.ts           # Chrome extension API types
+    └── manifest.json             # Extension configuration
 ```
 
 ## Backend (Cloudflare Workers)
@@ -57,98 +81,80 @@ universal-text-processor/
 ### Tech Stack
 
 - **Runtime**: Cloudflare Workers (V8 isolates)
-- **Framework**: Hono v4.7.11 (Express-like routing)
+- **Framework**: Hono v4.7.11
 - **Language**: TypeScript 5.7.3
 - **Database**: D1 (SQLite at edge)
-- **Cache**: KV Namespaces (key-value store)
-- **Storage**: R2 (S3-compatible object storage)
-- **Auth**: JWT with jose v5.10.0
+- **Vector DB**: Vectorize (semantic search)
+- **AI**: Workers AI (embeddings)
+- **Cache**: KV Namespaces
+- **Storage**: R2 (object storage)
+- **Auth**: JWT with jose
 
 ### Infrastructure Resources
 
-#### D1 Database
-- **Name**: text-processor-db
-- **ID**: b70b21ae-9fa2-4464-b3fd-9d4eeea7548a
-- **Region**: EEUR
-- **Binding**: `DB`
+| Resource | Binding | Purpose |
+|----------|---------|---------|
+| D1 Database | `DB` | Main data storage |
+| Vectorize | `VECTORIZE` | Vector embeddings for semantic search |
+| Workers AI | `AI` | Embedding generation (bge-base-en-v1.5) |
+| KV CACHE | `CACHE` | Response caching, rate limiting |
+| KV SESSIONS | `SESSIONS` | Session management |
+| R2 Bucket | `STORAGE` | File uploads, images |
+| HTML Service | `HTML_TO_IMAGE_SERVICE` | Screenshot generation |
+| Transcript Service | `TRANSCRIPT_SERVICE` | YouTube transcript extraction |
 
-**Tables**:
+### Database Tables
+
 ```sql
-users          # User accounts, auth
-posts          # Processed texts, drafts
-memory         # Saved text snippets
-sessions       # User sessions
-settings       # User preferences
-```
-
-#### KV Namespaces
-1. **CACHE**
-   - **ID**: b52a33acf7114a3e842d575b830b980e
-   - **Binding**: `CACHE`
-   - **Purpose**: Response caching, rate limiting
-
-2. **SESSIONS**
-   - **ID**: 7d68ad4ef5c14fe1aaaa981c50c15597
-   - **Binding**: `SESSIONS`
-   - **Purpose**: Session management
-
-#### R2 Bucket
-- **Name**: text-processor-storage
-- **Binding**: `STORAGE`
-- **Purpose**: File uploads, images, media
-
-### Environment Variables
-
-Configured in `wrangler.toml`:
-```toml
-ENVIRONMENT = "development"
-JWT_SECRET = "change-this-in-production"
-API_VERSION = "v1"
-APP_URL = "https://text-processor.app"
-OPENROUTER_API_KEY = ""  # For AI processing
+users           # User accounts, auth
+posts           # Processed texts, drafts, saved content
+memory          # Saved memories with tags & embeddings
+sessions        # User sessions
+settings        # User preferences
+webhook_events  # Received webhook data
+tasks           # Task management
+task_conversations # Task conversation threads
+chat_history    # Chat with memories history
 ```
 
 ### API Endpoints
 
-#### Base URL
-```
-https://text-processor-api.kureckamichal.workers.dev
-```
+**Base URL**: `https://my-memory.kureckamichal.workers.dev`
 
-#### Routes
-
-**Health & Info**
-- `GET /` - API info, version
-- `GET /health` - Health check
-
-**Authentication** (`/api/auth/`)
-- `POST /login` - User login
-- `POST /register` - User registration
-- `POST /refresh` - Refresh JWT token
+**Dashboard** (`/dashboard/`)
+- `GET /` - Main dashboard
+- `GET /memories` - Memory list with type filters
+- `GET /add` - Add content (memory, tweet, video, url)
+- `GET /chat` - Chat with memories (RAG)
+- `GET /tasks` - Task management
+- `GET /all-content` - All saved content
+- `GET /settings` - User settings
 
 **Memory** (`/api/memory/`)
-- `GET /` - List saved memories
-- `POST /` - Save to memory
-- `GET /:id` - Get specific memory
+- `POST /` - Save to memory with embeddings
+- `GET /` - List memories
 - `DELETE /:id` - Delete memory
 
-**Processing** (`/api/process/`)
-- `POST /` - Process text with AI
-- `POST /batch` - Batch process multiple texts
+**Search** (`/api/search/`)
+- `POST /semantic` - Vectorize-powered semantic search
+- `POST /keyword` - Keyword search fallback
+- `GET /recent` - Recent items with filters (`?q=`, `?tag=`)
 
-**Posts** (`/api/posts/`)
-- `GET /` - List posts
-- `POST /` - Create post
-- `GET /:id` - Get post
-- `PUT /:id` - Update post
-- `DELETE /:id` - Delete post
+**Chat** (`/api/chat/`)
+- `POST /` - Chat with memories (RAG pattern)
+- `GET /history` - Conversation history
 
-**Settings** (`/api/settings/`)
-- `GET /` - Get user settings
-- `PUT /` - Update settings
+**Tasks** (`/api/tasks/`)
+- `GET /` - List tasks
+- `POST /` - Create task
+- `PATCH /:id` - Update task
+- `POST /:id/conversation` - Add to task thread
 
-**Webhooks**
-- `POST /api/v1/webhook` - Receive webhook events
+**Webhook** (`/api/v1/webhook`)
+- `POST /` - Receive external events (tweets, videos, urls)
+
+**Admin** (`/api/admin/`)
+- `POST /migrate-vectors` - Migrate embeddings to Vectorize
 
 ### CORS Configuration
 
@@ -157,574 +163,111 @@ origin: (origin) => {
   if (!origin) return '*';
   if (origin.startsWith('chrome-extension://')) return origin;
   if (origin.startsWith('file://')) return origin;
-  if (origin === 'null') return 'null';
   return origin;
 }
 ```
 
-Allows: Chrome extensions, local files, all origins (for development)
-
 ### Deployment
 
 ```bash
 cd backend
 npm install
-npm run deploy
+npm run deploy   # Deploy to Cloudflare
+npm run dev      # Local development
+npm run tail     # Watch logs
 ```
 
-**Commands**:
-- `npm run dev` - Local development (localhost:8787)
-- `npm run deploy` - Deploy to Cloudflare
-- `npm run tail` - Watch real-time logs
-- `npm run d1:migrate` - Run database migrations
+## Key Features
 
-**Performance**:
-- Startup Time: 14-19ms
-- Bundle Size: 151 KiB (32 KiB gzipped)
-- Global Edge: 300+ cities
+### Semantic Search (Vectorize)
+- Uses Cloudflare Vectorize for vector storage
+- Workers AI `bge-base-en-v1.5` model (768 dimensions)
+- Fast cosine similarity search at edge
+- Filters by user, content type
+
+### Chat/RAG
+- Query memories using natural language
+- Retrieves relevant context via semantic search
+- Generates AI responses with memory citations
+- Conversation history persistence
+
+### Content Types
+- **Memory**: Text snippets with tags
+- **Tweet**: Saved tweets with metadata
+- **Video**: YouTube videos with transcripts
+- **URL/Link**: Web pages with auto-enrichment
+
+### Type Filtering
+- Filter memories by type: link, video, tweet
+- Auto-detection based on content and context
+- Visual badges in UI
+
+### URL Auto-Enrichment
+- Automatic metadata extraction for saved URLs
+- Title, description, favicon fetching
+- Integration with proxy endpoints
 
 ## Extension (Chrome Manifest V3)
 
-### Tech Stack
-
-- **Platform**: Chrome/Edge Manifest V3
-- **Language**: Vanilla JavaScript (ES6+)
-- **Storage**: IndexedDB + chrome.storage.local
-- **API Client**: Fetch API
-- **UI**: Custom FAB (Floating Action Button)
-
-### Architecture
-
-#### Service Worker (background.js)
-- **Type**: Service worker (not module)
-- **Imports**: Uses `importScripts()` (not ES modules)
-- **Lifecycle**: Auto-wakes on message, sleeps when idle
-
-**Key Responsibilities**:
-- Message handling from content script
-- API key storage management
-- OpenRouter API calls for AI processing
-- Database operations (IndexedDB)
-- Context menu creation
-- Webhook delivery
+### Features
+- FAB (Floating Action Button) for quick access
+- Text selection → Save to memory
+- Image processing with AI
 - Settings management
+- Offline storage with IndexedDB
 
-**Message Actions**:
-```javascript
-{
-  ping: "Wake up service worker",
-  processText: "Process text with AI",
-  saveToMemory: "Save to backend memory",
-  saveProcessedText: "Save processed result",
-  getSettings: "Retrieve settings",
-  updateSettings: "Update settings",
-  getModelSettings: "Get AI model config",
-  updateModelSettings: "Update AI models"
-}
-```
+### Service Worker
+- Message handling from content script
+- OpenRouter API calls
+- Webhook delivery
+- Settings sync
 
-#### Content Script (content.js)
-- **Injection**: All URLs (`<all_urls>`)
-- **Auto-load**: Yes (via manifest)
+## Development
 
-**Key Responsibilities**:
-- Text selection detection
-- Image click handling
-- FAB creation and management
-- Modal UI rendering
-- User interaction handling
-- Backend communication via messages
-
-**FAB (Floating Action Button)**:
-- Position: Bottom-left corner
-- Trigger: Text selection or image click
-- Actions:
-  - Process (AI processing)
-  - Memory (save to backend)
-  - Database (view saved items)
-  - Settings (configuration)
-
-#### API Client (api-client.js)
-Centralized backend communication layer.
-
-**Methods**:
-```javascript
-apiClient.init()                    // Initialize with settings
-apiClient.saveToMemory(data)        // POST /api/v1/memory
-apiClient.processText(data)         // POST /api/v1/process
-apiClient.sendWebhook(event, data)  // POST webhook
-apiClient.getSettings()             // GET /api/v1/settings
-apiClient.updateSettings(settings)  // PUT /api/v1/settings
-```
-
-**Configuration**:
-```javascript
-{
-  baseUrl: "https://text-processor-api.kureckamichal.workers.dev",
-  apiVersion: "v1",
-  apiKey: null  // Loaded from chrome.storage.local
-}
-```
-
-#### Database (database.js)
-IndexedDB wrapper for offline storage.
-
-**Store**: `posts`
-**Schema**:
-```javascript
-{
-  id: "auto-increment",
-  type: "memory|processed",
-  originalText: "string",
-  generatedOutput: "string",
-  mode: "string",
-  account: "string",
-  language: "string",
-  comment: "string",
-  context: "object",
-  timestamp: "number",
-  synced: "boolean"
-}
-```
-
-#### Settings Manager (settings-manager.js)
-Manages user profiles and processing modes.
-
-**Settings Structure**:
-```javascript
-{
-  accounts: [
-    {
-      id: "account_id",
-      name: "Account Name",
-      displayName: "Display Name",
-      enabled: true,
-      writingProfile: {
-        language: "english",
-        tone: "professional",
-        style: "informative",
-        personality: "Expert",
-        guidelines: [],
-        avoid: [],
-        targetAudience: "Business professionals",
-        contentFocus: [],
-        voiceCharacteristics: {}
-      }
-    }
-  ],
-  modes: {
-    rewrite_twitter: {
-      name: "Rewrite for Twitter",
-      description: "...",
-      promptTemplate: "..."
-    },
-    describe_image: {
-      name: "Describe Image",
-      model: "google/gemini-2.0-flash-001",
-      promptTemplate: "..."
-    }
-  },
-  api: {
-    provider: "openrouter",
-    endpoint: "https://openrouter.ai/api/v1/chat/completions",
-    model: "openai/gpt-4o-mini"
-  },
-  ui: {
-    defaultMode: "rewrite",
-    defaultAccount: "aicko_cz",
-    showPreview: true,
-    autoClose: false,
-    defaultLanguage: "cs"
-  },
-  languages: [...],
-  webhook: {
-    enabled: true,
-    url: "https://text-processor-api.kureckamichal.workers.dev/api/v1/webhook",
-    events: {}
-  },
-  backend: {
-    baseUrl: "https://text-processor-api.kureckamichal.workers.dev",
-    apiVersion: "v1"
-  }
-}
-```
-
-### Manifest Configuration
-
-```json
-{
-  "manifest_version": 3,
-  "name": "Universal Text Processor",
-  "version": "2.2.0",
-  "permissions": [
-    "activeTab",
-    "scripting",
-    "storage",
-    "contextMenus"
-  ],
-  "host_permissions": ["<all_urls>"],
-  "background": {
-    "service_worker": "background.js"
-  },
-  "content_scripts": [{
-    "matches": ["<all_urls>"],
-    "js": ["content.js"],
-    "css": ["styles.css"]
-  }],
-  "web_accessible_resources": [{
-    "resources": ["settings.json"],
-    "matches": ["<all_urls>"]
-  }]
-}
-```
-
-**Important Notes**:
-- NO `"type": "module"` in background (incompatible with importScripts)
-- Service worker uses importScripts(), not ES modules
-- All URLs access for maximum compatibility
-
-### Chrome Storage
-
-**Local Storage Keys**:
-```javascript
-{
-  apiKey: "Backend API key for authentication",
-  openrouterApiKey: "OpenRouter API key for AI",
-  contentModel: "AI model for text processing",
-  imageModel: "AI model for image description"
-}
-```
-
-### Extension Loading
-
-1. Open `chrome://extensions/`
-2. Enable "Developer mode"
-3. Click "Load unpacked"
-4. Select `/extension` directory
-5. Extension loads with ID: `epjggaaoglehneiflbfpkfghikblkjom`
-
-### Service Worker Lifecycle
-
-**States**:
-- **Inactive** (Neaktivní) - Normal when not in use
-- **Active** - When processing messages
-- **Terminated** - After idle timeout
-
-**Activation**:
-- Automatically on first message
-- User interaction (FAB click)
-- Context menu usage
-- Manual ping: `chrome.runtime.sendMessage({action: "ping"})`
-
-## Data Flow
-
-### Text Processing Flow
-
-```
-1. User selects text
-   ↓
-2. content.js detects selection
-   ↓
-3. FAB appears in bottom-left
-   ↓
-4. User clicks FAB → Process
-   ↓
-5. Modal opens with text
-   ↓
-6. User configures (account, mode, language)
-   ↓
-7. content.js → sendMessage → background.js
-   ↓
-8. background.js wakes up (if inactive)
-   ↓
-9. background.js calls OpenRouter API
-   ↓
-10. AI processes text
-    ↓
-11. Response → background.js
-    ↓
-12. background.js → sendResponse → content.js
-    ↓
-13. Modal shows result
-    ↓
-14. User approves/rejects
-    ↓
-15. Saved to IndexedDB (database.js)
-    ↓
-16. Optional: Webhook to backend
-```
-
-### Memory Save Flow
-
-```
-1. User selects text
-   ↓
-2. FAB appears
-   ↓
-3. User clicks FAB → Memory
-   ↓
-4. content.js calls wakeUpServiceWorker()
-   ↓
-5. Ping message sent to background.js
-   ↓
-6. background.js responds (now active)
-   ↓
-7. saveToMemory message sent
-   ↓
-8. background.js receives message
-   ↓
-9. Saves to local IndexedDB
-   ↓
-10. Calls apiClient.saveToMemory()
-    ↓
-11. POST to backend /api/v1/memory
-    ↓
-12. Backend saves to D1 database
-    ↓
-13. Optional: Webhook triggered
-    ↓
-14. Response to content.js
-    ↓
-15. Notification: "✓ Saved to memory"
-```
-
-## Development Workflows
-
-### Backend Development
-
+### Backend Commands
 ```bash
-cd backend
+npm run dev          # Local dev (localhost:8787)
+npm run deploy       # Deploy to production
+npm run tail         # Watch logs
+npm run d1:migrate   # Run migrations
+```
 
-# Install
-npm install
-
-# Local dev (http://localhost:8787)
-npm run dev
-
-# Deploy to production
-npm run deploy
-
-# Watch logs
-npm run tail
-
-# Database
-npx wrangler d1 execute text-processor-db --command "SELECT * FROM posts"
-npx wrangler d1 migrations apply text-processor-db
+### Database Commands
+```bash
+npx wrangler d1 execute text-processor-db --command "SELECT * FROM memory LIMIT 10"
 npx wrangler d1 migrations apply text-processor-db --remote
-
-# KV
-npx wrangler kv:namespace list
-npx wrangler kv:key list --namespace-id b52a33acf7114a3e842d575b830b980e
-
-# R2
-npx wrangler r2 bucket list
-npx wrangler r2 object list text-processor-storage
 ```
 
 ### Extension Development
-
 ```bash
 cd extension
-
-# Install dev dependencies (first time only)
-npm install
-
-# REQUIRED: Run linting before any commit
-npm run check        # Runs both type-check and lint
-npm run lint         # ESLint only
-npm run lint:fix     # Auto-fix fixable issues
-
-# No build step needed for extension itself
-# Edit files → Reload extension in chrome://extensions/
-
-# Test in browser
-open activate-test.html
-# Or load extension and test on any website
-
-# Check console
-# Service Worker: chrome://extensions/ → service worker link
-# Content Script: Page DevTools (F12) → Console
+npm run check   # Type check + lint (REQUIRED before commit)
+npm run lint    # ESLint only
 ```
 
-**IMPORTANT**: Always run `npm run check` in the extension directory before committing changes. This catches bugs like undefined variables and type mismatches that cause runtime errors.
+## File Size Rules
 
-### Testing Backend
+- **Maximum file**: 500 lines per file
+- **Refactor** if file exceeds 400 lines
+- **Single responsibility**: One domain per handler
 
-```bash
-# Health check
-curl https://text-processor-api.kureckamichal.workers.dev/
+## Security
 
-# Memory endpoint
-curl -X POST https://text-processor-api.kureckamichal.workers.dev/api/v1/memory \
-  -H "Content-Type: application/json" \
-  -d '{"text": "Test memory", "context": {}}'
+- JWT authentication
+- API key validation
+- Input sanitization
+- Rate limiting via KV
+- CORS restrictions
+- Cloudflare Access protection on dashboard
 
-# Webhook test
-curl -X POST https://text-processor-api.kureckamichal.workers.dev/api/v1/webhook \
-  -H "Content-Type: application/json" \
-  -d '{"event": "test", "data": {}}'
-```
+## Performance
 
-## Code Quality Rules
-
-### REQUIRED: Run Linting Before Commits
-**Extension**: Always run `npm run check` in the extension directory before committing any JavaScript changes.
-
-```bash
-cd extension
-npm run check  # MUST pass with 0 errors before commit
-```
-
-This catches:
-- Undefined variables (like the `account` bug that was found)
-- Dead code using undefined variables (like the `menuOpen` bug)
-- Type mismatches in API responses (like double-wrapped proxy responses)
-- Common JavaScript errors
-
-**Backend**: TypeScript compiler already enforces types. Run `npm run type-check` if needed.
-
-### API Response Handling
-When calling backend proxy endpoints (`/api/proxy/*`), responses may be double-wrapped:
-- Direct response: `{success, data: {url}}`
-- Proxy-wrapped: `{success, data: {success, data: {url}}}`
-
-Always check both levels when extracting data from proxy responses.
-
-## Common Issues & Solutions
-
-### Service Worker Won't Activate
-**Cause**: `"type": "module"` in manifest incompatible with importScripts()
-**Fix**: Remove `"type": "module"` from manifest.json background section
-
-### CORS Errors
-**Cause**: Backend not allowing extension origin
-**Fix**: CORS configuration in backend/src/index.ts already handles chrome-extension://
-
-### "Could not establish connection"
-**Cause**: Service worker inactive when content script sends message
-**Fix**: Call `wakeUpServiceWorker()` before sending messages (implemented in content.js)
-
-### FAB Not Appearing
-**Cause**: Content script not loaded or CSS not injected
-**Fix**: Reload extension, check console for errors
-
-### Backend Deployment Fails
-**Cause**: Missing wrangler.toml bindings or invalid IDs
-**Fix**: Ensure all resource IDs in wrangler.toml are correct
-
-## Performance Metrics
-
-### Backend
 - **Cold Start**: 14-19ms
 - **API Response**: <200ms
-- **Database Query**: <10ms (D1)
-- **KV Read**: <1ms
-- **R2 Read**: <50ms
-
-### Extension
-- **Service Worker Wake**: <100ms
-- **FAB Render**: <50ms
-- **Modal Open**: <100ms
-- **API Call**: <500ms (includes network)
-
-## Security Considerations
-
-### Backend
-- JWT tokens for authentication
-- API key validation
-- Input sanitization (all user inputs)
-- Rate limiting (via KV)
-- CORS restrictions
-- Environment variable secrets
-
-### Extension
-- No eval() or unsafe-inline
-- Content Security Policy enforced
-- API keys stored in chrome.storage (encrypted by Chrome)
-- No secrets in code
-- HTTPS only for API calls
-
-## File Size Limits
-
-### Backend
-- **Maximum file**: 500 lines (enforced in CLAUDE.md)
-- **Bundle size**: <1MB target
-- **D1 database**: 500MB per database
-- **KV value**: 25MB max
-- **R2 object**: 5TB max
-
-### Extension
-- **Manifest V3**: No size limit
-- **IndexedDB**: ~50MB per origin
-- **chrome.storage.local**: 10MB
-
-## Dependencies
-
-### Backend
-```json
-{
-  "hono": "^4.7.11",
-  "jose": "^5.10.0"
-}
-```
-
-### Extension
-**Runtime**: No npm dependencies - pure vanilla JavaScript
-**Dev Dependencies** (for linting/type-checking):
-```json
-{
-  "eslint": "^8.57.0",
-  "typescript": "^5.7.3"
-}
-```
-
-## Git Workflow
-
-### Repository
-- **Remote**: https://github.com/mkurecka/x-post-sender
-- **Branch**: master
-- **Structure**: Monorepo (backend + extension)
-
-### Commit Format
-```
-<type>: <description>
-
-<body>
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
-```
-
-Types: feat, fix, docs, refactor, test, chore
-
-### Deployment
-- Backend: Manual via `npm run deploy`
-- Extension: Manual load in browser
-
-## Environment Setup
-
-### Required
-- Node.js 18+
-- npm 9+
-- Wrangler CLI 4.49.1+
-- Chrome/Edge browser
-- GitHub account
-- Cloudflare account
-
-### Optional
-- OpenRouter API key (for AI processing)
-- Custom domain (for backend)
-
-## Contact & Support
-
-- **Extension ID**: epjggaaoglehneiflbfpkfghikblkjom
-- **Backend**: https://text-processor-api.kureckamichal.workers.dev
-- **Repository**: https://github.com/mkurecka/x-post-sender
-- **Version**: 2.2.0
+- **Vectorize Query**: <50ms
+- **Global Edge**: 300+ cities
 
 ---
 
-**Last Updated**: 2025-11-25
+**Last Updated**: 2025-12-31
 **Status**: ✅ Production Ready
-**Deployment**: Live on Cloudflare Workers

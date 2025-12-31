@@ -42,6 +42,14 @@ export function memoriesPage({ count, apiBase }: MemoriesPageProps): string {
         </div>
       </div>
 
+      <!-- Type Filters -->
+      <div class="type-filters">
+        <button class="type-filter active" data-type="">All</button>
+        <button class="type-filter" data-type="link">🔗 Links</button>
+        <button class="type-filter" data-type="video">📹 Videos</button>
+        <button class="type-filter" data-type="tweet">🐦 Tweets</button>
+      </div>
+
       <!-- Memories List -->
       <div id="memories-container">
         ${count === 0 ? emptyState({
@@ -119,6 +127,62 @@ export function memoriesPage({ count, apiBase }: MemoriesPageProps): string {
         background: var(--surface);
         font-size: 0.875rem;
         cursor: pointer;
+      }
+
+      .type-filters {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+      }
+
+      .type-filter {
+        padding: 0.5rem 1rem;
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        background: var(--surface);
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .type-filter:hover {
+        background: var(--background);
+        border-color: var(--primary);
+        color: var(--primary);
+      }
+
+      .type-filter.active {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: white;
+      }
+
+      .memory-type-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.7rem;
+        font-weight: 500;
+        text-transform: uppercase;
+      }
+
+      .memory-type-badge.link {
+        background: #dbeafe;
+        color: #1e40af;
+      }
+
+      .memory-type-badge.video {
+        background: #fee2e2;
+        color: #991b1b;
+      }
+
+      .memory-type-badge.tweet {
+        background: #e0f2fe;
+        color: #0369a1;
       }
 
       .loading-container {
@@ -582,6 +646,7 @@ export function memoriesPage({ count, apiBase }: MemoriesPageProps): string {
       let currentPage = 1;
       let currentSearch = '';
       let currentSort = 'newest';
+      let currentType = '';
       const perPage = 20;
 
       async function loadMemories() {
@@ -594,6 +659,9 @@ export function memoriesPage({ count, apiBase }: MemoriesPageProps): string {
 
           if (currentSearch) {
             url += '&q=' + encodeURIComponent(currentSearch);
+          }
+          if (currentType) {
+            url += '&tag=' + encodeURIComponent(currentType);
           }
 
           const response = await fetch(url);
@@ -612,12 +680,24 @@ export function memoriesPage({ count, apiBase }: MemoriesPageProps): string {
               const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
               const context = item.context_json ? JSON.parse(item.context_json) : {};
               const url = context.url || '';
-              const pageTitle = context.pageTitle || 'Source';
+              const pageTitle = context.pageTitle || context.title || 'Source';
+              const tag = item.tag || context.type || '';
+
+              // Determine type badge
+              let typeBadge = '';
+              if (tag === 'link' || (item.text && item.text.match(/^https?:\\/\\//) && item.text.length < 500)) {
+                typeBadge = '<span class="memory-type-badge link">🔗 Link</span>';
+              } else if (tag === 'video' || context.videoId) {
+                typeBadge = '<span class="memory-type-badge video">📹 Video</span>';
+              } else if (tag === 'tweet' || context.tweetId) {
+                typeBadge = '<span class="memory-type-badge tweet">🐦 Tweet</span>';
+              }
 
               return \`
                 <div class="memory-card" data-id="\${item.id}" onclick="openModal(\${JSON.stringify(item).replace(/"/g, '&quot;')})">
                   <div class="memory-text">\${escapeHtml(item.text)}</div>
                   <div class="memory-meta">
+                    \${typeBadge}
                     <span class="memory-meta-item">📅 \${dateStr}</span>
                     \${url ? \`<a href="\${url}" target="_blank" class="memory-source memory-meta-item" onclick="event.stopPropagation()">🔗 \${pageTitle}</a>\` : ''}
                     <button class="delete-btn" onclick="event.stopPropagation(); deleteMemory('\${item.id}', this)" title="Delete">🗑️</button>
@@ -684,6 +764,17 @@ export function memoriesPage({ count, apiBase }: MemoriesPageProps): string {
       document.getElementById('sort-select').addEventListener('change', function(e) {
         currentSort = e.target.value;
         loadMemories();
+      });
+
+      // Type filter click handlers
+      document.querySelectorAll('.type-filter').forEach(btn => {
+        btn.addEventListener('click', function() {
+          document.querySelectorAll('.type-filter').forEach(b => b.classList.remove('active'));
+          this.classList.add('active');
+          currentType = this.dataset.type;
+          currentPage = 1;
+          loadMemories();
+        });
       });
 
       function debounce(func, wait) {

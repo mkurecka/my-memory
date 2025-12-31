@@ -38,6 +38,9 @@ router.post('/', async (c) => {
     }
 
     // Save actual data to appropriate tables based on event type
+    let savedId: string | null = null;
+    let savedType: string | null = null;
+
     if (userId) {
       console.log('[Webhook] UserId present, attempting to save data...');
       try {
@@ -50,20 +53,24 @@ router.post('/', async (c) => {
           case 'onSaveTweet':
             console.log('[Webhook] Calling saveTweetToDatabase...');
             await saveTweetToDatabase(c, userId, data);
+            savedType = 'tweet';
             break;
           case 'onSaveYouTubeVideo':
             console.log('[Webhook] Calling saveYouTubeVideoToDatabase...');
             await saveYouTubeVideoToDatabase(c, userId, data);
+            savedType = 'video';
             break;
           case 'saveToMemory':
           case 'onSaveToMemory':
             console.log('[Webhook] Calling saveMemoryToDatabase...');
-            await saveMemoryToDatabase(c, userId, data);
+            savedId = await saveMemoryToDatabase(c, userId, data);
+            savedType = 'memory';
             break;
           case 'processText':
           case 'onProcessText':
             console.log('[Webhook] Calling saveProcessedTextToDatabase...');
             await saveProcessedTextToDatabase(c, userId, data);
+            savedType = 'processed';
             break;
           default:
             console.log('[Webhook] Unknown event type, not saving:', event);
@@ -138,6 +145,8 @@ router.post('/', async (c) => {
       message: 'Webhook received',
       event,
       forwarded: !!forwardUrl,
+      memoryId: savedId,
+      savedType,
       timestamp: Date.now()
     });
 
@@ -315,11 +324,34 @@ async function saveYouTubeVideoToDatabase(c: any, userId: string, data: any) {
 }
 
 /**
- * Helper function to save memory data to memory table
+ * Helper function to detect if text is a URL
  */
-async function saveMemoryToDatabase(c: any, userId: string, data: any) {
+function isUrl(text: string): boolean {
+  const trimmed = text.trim();
+  return /^https?:\/\/[^\s]+$/.test(trimmed) && trimmed.length < 500;
+}
+
+/**
+ * Helper function to detect URL type
+ */
+function detectUrlType(url: string): 'youtube' | 'twitter' | 'webpage' {
+  if (/youtube\.com|youtu\.be/i.test(url)) return 'youtube';
+  if (/twitter\.com|x\.com/i.test(url)) return 'twitter';
+  return 'webpage';
+}
+
+/**
+ * Helper function to save memory data to memory table
+ * Returns the memoryId for potential enrichment
+ */
+async function saveMemoryToDatabase(c: any, userId: string, data: any): Promise<string> {
   const memoryId = generateId('mem');
   const text = data.text || '';
+
+  // Detect if this is a URL and set appropriate tag
+  const isUrlMemory = isUrl(text);
+  const urlType = isUrlMemory ? detectUrlType(text) : null;
+  const tag = data.context?.type === 'link' || isUrlMemory ? 'link' : (data.tag || null);
 
   // Generate embedding and keywords using Workers AI
   let embedding: number[] | null = null;
@@ -330,15 +362,22 @@ async function saveMemoryToDatabase(c: any, userId: string, data: any) {
     keywords = extractKeywords(text);
   }
 
+  // Merge context with URL type info
+  const context = {
+    ...(data.context || {}),
+    ...(isUrlMemory ? { urlType, isUrl: true } : {})
+  };
+
   await c.env.DB.prepare(
-    `INSERT INTO memory (id, user_id, text, context_json, priority, embedding_vector, embedding_model, search_keywords, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO memory (id, user_id, text, context_json, priority, tag, embedding_vector, embedding_model, search_keywords, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     memoryId,
     userId,
     text,
-    JSON.stringify(data.context || {}),
+    JSON.stringify(context),
     'medium',
+    tag,
     embedding ? JSON.stringify(embedding) : null,
     embedding ? EMBEDDING_MODEL : null,
     keywords.length > 0 ? JSON.stringify(keywords) : null,
@@ -350,11 +389,12 @@ async function saveMemoryToDatabase(c: any, userId: string, data: any) {
     await insertVector(c.env, memoryId, embedding, {
       user_id: userId,
       table: 'memory',
-      type: 'memory'
+      type: tag || 'memory'
     });
   }
 
-  console.log('[Webhook] Saved to memory table:', memoryId, embedding ? '(with embedding + vectorize)' : '(no embedding)');
+  console.log('[Webhook] Saved to memory table:', memoryId, tag ? `(tag: ${tag})` : '', embedding ? '(with embedding + vectorize)' : '(no embedding)');
+  return memoryId;
 }
 
 /**

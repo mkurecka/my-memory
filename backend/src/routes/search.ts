@@ -200,6 +200,7 @@ search.post('/keyword', authMiddleware, async (c) => {
 /**
  * GET /api/search/recent
  * Get recent posts or memories (public endpoint for dashboard)
+ * Supports text search via `q` query parameter
  */
 search.get('/recent', async (c) => {
   try {
@@ -220,23 +221,31 @@ search.get('/recent', async (c) => {
     const type = c.req.query('type'); // Optional filter for posts type
     const event = c.req.query('event'); // Optional filter for webhook event type
     const hasGenerated = c.req.query('hasGenerated') === 'true'; // Filter for AI content
+    const searchQuery = c.req.query('q')?.trim(); // Text search query
+    const tagFilter = c.req.query('tag')?.trim(); // Filter by tag (link, video, tweet)
 
     let sql: string;
     let bindings: any[];
 
     if (table === 'webhook_events') {
       // Webhook events table
+      const conditions: string[] = [];
+      bindings = [];
+
       if (event) {
-        sql = `SELECT id, event, data_json, user_id, created_at
-               FROM webhook_events WHERE event = ?
-               ORDER BY created_at DESC LIMIT ? OFFSET ?`;
-        bindings = [event, limit, offset];
-      } else {
-        sql = `SELECT id, event, data_json, user_id, created_at
-               FROM webhook_events
-               ORDER BY created_at DESC LIMIT ? OFFSET ?`;
-        bindings = [limit, offset];
+        conditions.push('event = ?');
+        bindings.push(event);
       }
+      if (searchQuery) {
+        conditions.push('(event LIKE ? OR data_json LIKE ?)');
+        bindings.push(`%${searchQuery}%`, `%${searchQuery}%`);
+      }
+
+      const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+      sql = `SELECT id, event, data_json, user_id, created_at
+             FROM webhook_events ${whereClause}
+             ORDER BY created_at DESC LIMIT ? OFFSET ?`;
+      bindings.push(limit, offset);
     } else if (table === 'posts') {
       // Build WHERE conditions
       const conditions: string[] = [];
@@ -253,6 +262,10 @@ search.get('/recent', async (c) => {
       if (hasGenerated) {
         conditions.push("generated_output IS NOT NULL AND generated_output != ''");
       }
+      if (searchQuery) {
+        conditions.push('(original_text LIKE ? OR generated_output LIKE ? OR context_json LIKE ?)');
+        bindings.push(`%${searchQuery}%`, `%${searchQuery}%`, `%${searchQuery}%`);
+      }
 
       const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
       sql = `SELECT id, type, original_text, generated_output, created_at, context_json
@@ -260,17 +273,37 @@ search.get('/recent', async (c) => {
              ORDER BY created_at DESC LIMIT ? OFFSET ?`;
       bindings.push(limit, offset);
     } else {
+      // Memory table
+      const conditions: string[] = [];
+      bindings = [];
+
       if (userId) {
-        sql = `SELECT id, text, context_json, tags, created_at
-               FROM memory WHERE user_id = ?
-               ORDER BY created_at DESC LIMIT ?`;
-        bindings = [userId, limit];
-      } else {
-        sql = `SELECT id, text, context_json, tags, created_at
-               FROM memory
-               ORDER BY created_at DESC LIMIT ?`;
-        bindings = [limit];
+        conditions.push('user_id = ?');
+        bindings.push(userId);
       }
+      if (searchQuery) {
+        conditions.push('(text LIKE ? OR context_json LIKE ? OR tags LIKE ?)');
+        bindings.push(`%${searchQuery}%`, `%${searchQuery}%`, `%${searchQuery}%`);
+      }
+      if (tagFilter) {
+        // Filter by tag or by detecting URL-only for 'link' type
+        if (tagFilter === 'link') {
+          conditions.push("(tag = 'link' OR (text LIKE 'http%' AND LENGTH(text) < 500))");
+        } else if (tagFilter === 'video') {
+          conditions.push("(tag = 'video' OR context_json LIKE '%videoId%')");
+        } else if (tagFilter === 'tweet') {
+          conditions.push("(tag = 'tweet' OR context_json LIKE '%tweetId%')");
+        } else {
+          conditions.push('tag = ?');
+          bindings.push(tagFilter);
+        }
+      }
+
+      const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+      sql = `SELECT id, text, context_json, tags, tag, created_at
+             FROM memory ${whereClause}
+             ORDER BY created_at DESC LIMIT ? OFFSET ?`;
+      bindings.push(limit, offset);
     }
 
     const stmt = c.env.DB.prepare(sql).bind(...bindings);
@@ -279,6 +312,7 @@ search.get('/recent', async (c) => {
     return c.json({
       success: true,
       table,
+      query: searchQuery || null,
       results: results.results || [],
       count: results.results?.length || 0
     });

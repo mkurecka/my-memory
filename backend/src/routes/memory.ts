@@ -24,7 +24,7 @@ async function authMiddleware(c: any, next: any) {
   await next();
 }
 
-// POST /api/memory - Create memory
+// POST /api/memory - Create memory (auto-enriches URLs)
 memory.post('/', authMiddleware, async (c) => {
   try {
     const userId = c.get('userId');
@@ -40,10 +40,81 @@ memory.post('/', authMiddleware, async (c) => {
     const memoryId = generateId();
     const now = Date.now();
 
+    // Check if text is a URL-only string - auto-enrich if so
+    const trimmedText = text.trim();
+    const urlPattern = /^https?:\/\/[^\s]+$/;
+    const isUrl = urlPattern.test(trimmedText);
+
+    let finalText = text;
+    let finalContext = context || {};
+    let finalTag = tag;
+    let urlType: 'youtube' | 'twitter' | 'webpage' | null = null;
+
+    if (isUrl) {
+      const url = trimmedText;
+      urlType = detectUrlType(url);
+      console.log('[Memory] Auto-enriching URL:', url, 'type:', urlType);
+
+      let extractedContent: {
+        title?: string;
+        description?: string;
+        text: string;
+        transcript?: string;
+        author?: string;
+        thumbnailUrl?: string;
+        duration?: string;
+        metadata?: Record<string, any>;
+      } | null = null;
+
+      // Extract content based on URL type
+      if (urlType === 'youtube') {
+        extractedContent = await extractYouTubeContent(c.env, url);
+      } else if (urlType === 'twitter') {
+        extractedContent = await extractTwitterContent(url);
+      } else {
+        extractedContent = await extractWebpageContent(url);
+      }
+
+      if (extractedContent && extractedContent.text !== url) {
+        // Build combined text for embedding
+        finalText = [
+          extractedContent.title,
+          extractedContent.description,
+          extractedContent.transcript || extractedContent.text
+        ].filter(Boolean).join(' ').substring(0, 10000);
+
+        // Merge context with extracted data
+        finalContext = {
+          ...finalContext,
+          url,
+          type: urlType,
+          title: extractedContent.title,
+          description: extractedContent.description,
+          author: extractedContent.author,
+          thumbnailUrl: extractedContent.thumbnailUrl,
+          duration: extractedContent.duration,
+          hasTranscript: !!extractedContent.transcript,
+          ...extractedContent.metadata
+        };
+
+        // Use URL type as default tag if not provided
+        if (!finalTag) {
+          finalTag = urlType;
+        }
+
+        console.log('[Memory] URL enriched - title:', extractedContent.title?.substring(0, 50));
+      } else {
+        // Extraction failed, save URL as-is with type info
+        finalContext = { ...finalContext, url, type: urlType };
+        if (!finalTag) finalTag = urlType;
+        console.log('[Memory] URL extraction failed, saving as-is');
+      }
+    }
+
     // Generate embedding for semantic search
     let embedding: number[] | null = null;
     if (c.env.AI) {
-      embedding = await generateEmbedding(c.env, text);
+      embedding = await generateEmbedding(c.env, finalText);
     }
 
     await c.env.DB
@@ -54,9 +125,9 @@ memory.post('/', authMiddleware, async (c) => {
       .bind(
         memoryId,
         userId,
-        text,
-        context ? JSON.stringify(context) : null,
-        tag || null,
+        finalText,
+        Object.keys(finalContext).length > 0 ? JSON.stringify(finalContext) : null,
+        finalTag || null,
         priority,
         embedding ? JSON.stringify(embedding) : null,
         embedding ? EMBEDDING_MODEL : null,
@@ -69,7 +140,7 @@ memory.post('/', authMiddleware, async (c) => {
       await insertVector(c.env, memoryId, embedding, {
         user_id: userId,
         table: 'memory',
-        type: 'memory'
+        type: urlType || 'memory'
       });
       console.log('[Memory] Created with embedding:', memoryId);
     }
@@ -77,7 +148,8 @@ memory.post('/', authMiddleware, async (c) => {
     return c.json({
       success: true,
       memoryId,
-      message: 'Memory saved successfully',
+      message: isUrl ? `${urlType} content saved successfully` : 'Memory saved successfully',
+      ...(isUrl && { type: urlType, enriched: finalText !== text })
     }, 201);
   } catch (error: any) {
     console.error('Create memory error:', error);
@@ -286,125 +358,6 @@ memory.delete('/:id', authMiddleware, async (c) => {
   }
 });
 
-// POST /api/memory/from-url - Create memory from URL with auto-content extraction
-memory.post('/from-url', authMiddleware, async (c) => {
-  try {
-    const userId = c.get('userId');
-    const { url, tag, priority = 'medium' } = await c.req.json();
-
-    if (!url) {
-      return c.json({ success: false, error: 'URL is required' }, 400);
-    }
-
-    // Detect URL type
-    const urlType = detectUrlType(url);
-    console.log('[Memory] Processing URL:', url, 'type:', urlType);
-
-    let extractedContent: {
-      title?: string;
-      description?: string;
-      text: string;
-      transcript?: string;
-      author?: string;
-      thumbnailUrl?: string;
-      duration?: string;
-      metadata?: Record<string, any>;
-    } | null = null;
-
-    // Extract content based on URL type
-    if (urlType === 'youtube') {
-      extractedContent = await extractYouTubeContent(c.env, url);
-    } else if (urlType === 'twitter') {
-      extractedContent = await extractTwitterContent(url);
-    } else {
-      // Generic webpage - just save the URL for now
-      extractedContent = { text: url };
-    }
-
-    if (!extractedContent) {
-      return c.json({
-        success: false,
-        error: 'Failed to extract content from URL'
-      }, 400);
-    }
-
-    const memoryId = generateId();
-    const now = Date.now();
-
-    // Build combined text for embedding
-    const combinedText = [
-      extractedContent.title,
-      extractedContent.description,
-      extractedContent.transcript || extractedContent.text
-    ].filter(Boolean).join(' ');
-
-    // Generate embedding
-    let embedding: number[] | null = null;
-    if (c.env.AI && combinedText) {
-      embedding = await generateEmbedding(c.env, combinedText);
-    }
-
-    // Build context with all extracted data
-    const context = {
-      url,
-      type: urlType,
-      title: extractedContent.title,
-      description: extractedContent.description,
-      author: extractedContent.author,
-      thumbnailUrl: extractedContent.thumbnailUrl,
-      duration: extractedContent.duration,
-      hasTranscript: !!extractedContent.transcript,
-      ...extractedContent.metadata
-    };
-
-    // Save to D1
-    await c.env.DB
-      .prepare(`
-        INSERT INTO memory (id, user_id, text, context_json, tag, priority, embedding_vector, embedding_model, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `)
-      .bind(
-        memoryId,
-        userId,
-        combinedText.substring(0, 10000), // Limit text size
-        JSON.stringify(context),
-        tag || urlType, // Use URL type as default tag
-        priority,
-        embedding ? JSON.stringify(embedding) : null,
-        embedding ? EMBEDDING_MODEL : null,
-        now
-      )
-      .run();
-
-    // Insert into Vectorize
-    if (embedding && c.env.VECTORIZE) {
-      await insertVector(c.env, memoryId, embedding, {
-        user_id: userId,
-        table: 'memory',
-        type: urlType
-      });
-    }
-
-    console.log('[Memory] Created from URL:', memoryId, 'type:', urlType, embedding ? '(with embedding)' : '');
-
-    return c.json({
-      success: true,
-      memoryId,
-      type: urlType,
-      title: extractedContent.title,
-      hasTranscript: !!extractedContent.transcript,
-      message: `${urlType} content saved successfully`
-    }, 201);
-
-  } catch (error: any) {
-    console.error('[Memory] from-url error:', error);
-    return c.json({
-      success: false,
-      error: error.message || 'Failed to process URL'
-    }, 500);
-  }
-});
-
 /**
  * Detect URL type from URL string
  */
@@ -554,6 +507,226 @@ async function extractTwitterContent(url: string): Promise<{
 
   // Fallback: just return URL
   return { text: url, metadata: { url } };
+}
+
+// POST /api/memory/:id/enrich - Re-process existing memory to extract URL content
+memory.post('/:id/enrich', authMiddleware, async (c) => {
+  try {
+    const userId = c.get('userId');
+    const memoryId = c.req.param('id');
+
+    // Fetch the existing memory
+    const existing = await c.env.DB
+      .prepare('SELECT id, text, context_json FROM memory WHERE id = ? AND user_id = ?')
+      .bind(memoryId, userId)
+      .first<{ id: string; text: string; context_json: string | null }>();
+
+    if (!existing) {
+      return c.json({ success: false, error: 'Memory not found' }, 404);
+    }
+
+    // Check if text looks like a URL
+    const text = existing.text.trim();
+    const urlPattern = /^https?:\/\/[^\s]+$/;
+    if (!urlPattern.test(text)) {
+      return c.json({
+        success: false,
+        error: 'Memory text is not a URL. Only URL-only memories can be enriched.'
+      }, 400);
+    }
+
+    const url = text;
+    const urlType = detectUrlType(url);
+    console.log('[Memory] Enriching:', memoryId, 'URL:', url, 'type:', urlType);
+
+    let extractedContent: {
+      title?: string;
+      description?: string;
+      text: string;
+      transcript?: string;
+      author?: string;
+      thumbnailUrl?: string;
+      duration?: string;
+      metadata?: Record<string, any>;
+    } | null = null;
+
+    // Extract content based on URL type
+    if (urlType === 'youtube') {
+      extractedContent = await extractYouTubeContent(c.env, url);
+    } else if (urlType === 'twitter') {
+      extractedContent = await extractTwitterContent(url);
+    } else {
+      // Generic webpage - try to fetch and extract
+      extractedContent = await extractWebpageContent(url);
+    }
+
+    if (!extractedContent || extractedContent.text === url) {
+      return c.json({
+        success: false,
+        error: 'Could not extract content from URL'
+      }, 400);
+    }
+
+    // Build combined text for embedding
+    const combinedText = [
+      extractedContent.title,
+      extractedContent.description,
+      extractedContent.transcript || extractedContent.text
+    ].filter(Boolean).join(' ');
+
+    // Generate new embedding
+    let embedding: number[] | null = null;
+    if (c.env.AI && combinedText) {
+      embedding = await generateEmbedding(c.env, combinedText);
+    }
+
+    // Merge with existing context
+    let existingContext: Record<string, any> = {};
+    try {
+      existingContext = existing.context_json ? JSON.parse(existing.context_json) : {};
+    } catch { /* ignore */ }
+
+    const newContext = {
+      ...existingContext,
+      url,
+      type: urlType,
+      title: extractedContent.title,
+      description: extractedContent.description,
+      author: extractedContent.author,
+      thumbnailUrl: extractedContent.thumbnailUrl,
+      duration: extractedContent.duration,
+      hasTranscript: !!extractedContent.transcript,
+      enrichedAt: new Date().toISOString(),
+      ...extractedContent.metadata
+    };
+
+    // Update D1
+    await c.env.DB
+      .prepare(`
+        UPDATE memory
+        SET text = ?, context_json = ?, tag = COALESCE(tag, ?),
+            embedding_vector = ?, embedding_model = ?
+        WHERE id = ?
+      `)
+      .bind(
+        combinedText.substring(0, 10000),
+        JSON.stringify(newContext),
+        urlType,
+        embedding ? JSON.stringify(embedding) : null,
+        embedding ? EMBEDDING_MODEL : null,
+        memoryId
+      )
+      .run();
+
+    // Update Vectorize
+    if (embedding && c.env.VECTORIZE) {
+      await insertVector(c.env, memoryId, embedding, {
+        user_id: userId,
+        table: 'memory',
+        type: urlType
+      });
+    }
+
+    console.log('[Memory] Enriched:', memoryId, 'type:', urlType, embedding ? '(with embedding)' : '');
+
+    return c.json({
+      success: true,
+      memoryId,
+      type: urlType,
+      title: extractedContent.title,
+      hasTranscript: !!extractedContent.transcript,
+      textLength: combinedText.length,
+      message: `Memory enriched with ${urlType} content`
+    });
+
+  } catch (error: any) {
+    console.error('[Memory] enrich error:', error);
+    return c.json({
+      success: false,
+      error: error.message || 'Failed to enrich memory'
+    }, 500);
+  }
+});
+
+/**
+ * Extract content from generic webpage using fetch
+ */
+async function extractWebpageContent(url: string): Promise<{
+  title?: string;
+  description?: string;
+  text: string;
+  author?: string;
+  metadata?: Record<string, any>;
+} | null> {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; MyMemoryBot/1.0)'
+      }
+    });
+
+    if (!response.ok) {
+      console.warn('[Memory] Webpage fetch failed:', response.status);
+      return null;
+    }
+
+    const html = await response.text();
+
+    // Extract title
+    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    const title = titleMatch ? titleMatch[1].trim() : '';
+
+    // Extract meta description
+    const descMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i) ||
+                      html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*name=["']description["']/i);
+    const description = descMatch ? descMatch[1].trim() : '';
+
+    // Extract Open Graph data
+    const ogTitleMatch = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i);
+    const ogDescMatch = html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i);
+    const ogImageMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i);
+
+    // Extract article/main content (basic extraction)
+    let mainText = '';
+
+    // Try to find article content
+    const articleMatch = html.match(/<article[^>]*>([\s\S]*?)<\/article>/i);
+    if (articleMatch) {
+      mainText = articleMatch[1];
+    } else {
+      // Try main tag
+      const mainMatch = html.match(/<main[^>]*>([\s\S]*?)<\/main>/i);
+      if (mainMatch) {
+        mainText = mainMatch[1];
+      }
+    }
+
+    // Strip HTML tags and clean up
+    const cleanText = mainText
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .substring(0, 8000); // Limit for embedding
+
+    const finalTitle = ogTitleMatch?.[1] || title;
+    const finalDesc = ogDescMatch?.[1] || description;
+
+    return {
+      title: finalTitle,
+      description: finalDesc,
+      text: cleanText || finalDesc || finalTitle || url,
+      metadata: {
+        url,
+        ogImage: ogImageMatch?.[1]
+      }
+    };
+
+  } catch (error) {
+    console.error('[Memory] Webpage extraction error:', error);
+    return null;
+  }
 }
 
 // GET /api/memory/tags/list - List all unique tags

@@ -26,6 +26,7 @@ export function addContentPage({ apiBase, userId }: AddContentPageProps): string
       <!-- Tab Navigation -->
       <div class="tabs">
         <button class="tab active" data-tab="memory">💾 Memory</button>
+        <button class="tab" data-tab="url">🔗 URL/Link</button>
         <button class="tab" data-tab="tweet">🐦 Tweet</button>
         <button class="tab" data-tab="youtube">📹 YouTube</button>
       </div>
@@ -52,6 +53,30 @@ export function addContentPage({ apiBase, userId }: AddContentPageProps): string
             <input type="text" id="memory-tags" name="tags" placeholder="tag1, tag2, tag3" />
           </div>
           <button type="submit" class="btn-primary">💾 Save Memory</button>
+        </form>
+      </div>
+
+      <!-- URL/Link Form -->
+      <div id="url-tab" class="tab-content">
+        <form id="url-form" class="content-form">
+          <div class="form-group">
+            <label for="url-input">URL *</label>
+            <input type="url" id="url-input" name="url" placeholder="https://example.com/article..." required />
+            <span class="form-hint">Paste any URL - we'll automatically extract the title and description</span>
+          </div>
+          <div class="form-group">
+            <label for="url-note">Note (optional)</label>
+            <textarea id="url-note" name="note" rows="3" placeholder="Why are you saving this link? Add any notes..."></textarea>
+          </div>
+          <div class="form-group">
+            <label for="url-tags">Tags (comma-separated)</label>
+            <input type="text" id="url-tags" name="tags" placeholder="research, article, reference" />
+          </div>
+          <div id="url-preview" class="url-preview hidden">
+            <div class="preview-header">📄 Preview</div>
+            <div class="preview-content"></div>
+          </div>
+          <button type="submit" class="btn-primary">🔗 Save Link</button>
         </form>
       </div>
 
@@ -281,6 +306,44 @@ export function addContentPage({ apiBase, userId }: AddContentPageProps): string
         color: #0369a1;
         border: 1px solid #7dd3fc;
       }
+
+      .url-preview {
+        margin: 1rem 0;
+        padding: 1rem;
+        background: var(--background);
+        border-radius: 8px;
+        border: 1px solid var(--border);
+      }
+
+      .url-preview.hidden {
+        display: none;
+      }
+
+      .preview-header {
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        color: var(--text-secondary);
+      }
+
+      .preview-content {
+        font-size: 0.9rem;
+        color: var(--text-primary);
+      }
+
+      .preview-content .preview-title {
+        font-weight: 600;
+        margin-bottom: 0.25rem;
+      }
+
+      .preview-content .preview-description {
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+      }
+
+      .preview-loading {
+        color: var(--text-secondary);
+        font-style: italic;
+      }
     </style>
   `;
 
@@ -340,6 +403,57 @@ export function addContentPage({ apiBase, userId }: AddContentPageProps): string
       function hideStatus() {
         document.getElementById('status-message').className = 'status-message hidden';
       }
+
+      // URL form submission
+      document.getElementById('url-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const form = e.target;
+        const btn = form.querySelector('button[type="submit"]');
+        const url = form.url.value.trim();
+
+        if (!url) {
+          showStatus('Please enter a URL', 'error');
+          return;
+        }
+
+        btn.disabled = true;
+        showStatus('Saving link and enriching content...', 'loading');
+
+        try {
+          // Save as memory with just the URL, then trigger enrichment
+          const response = await fetch(API_BASE + '/api/v1/webhook', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              event: 'onSaveToMemory',
+              userId: USER_ID,
+              data: {
+                text: url,
+                context: {
+                  url: url,
+                  note: form.note.value || null,
+                  tags: form.tags.value ? form.tags.value.split(',').map(t => t.trim()) : [],
+                  type: 'link'
+                }
+              }
+            })
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            showStatus('Link saved successfully!', 'success');
+            form.reset();
+            document.getElementById('url-preview').classList.add('hidden');
+          } else {
+            showStatus('Error: ' + (result.error || 'Failed to save'), 'error');
+          }
+        } catch (error) {
+          showStatus('Error: ' + error.message, 'error');
+        } finally {
+          btn.disabled = false;
+        }
+      });
 
       // Memory form submission
       document.getElementById('memory-form').addEventListener('submit', async (e) => {

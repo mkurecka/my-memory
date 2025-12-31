@@ -453,4 +453,429 @@ router.post('/test-vectorize', async (c) => {
   }
 });
 
+/**
+ * POST /api/admin/label-url-memories
+ * Add "link" tag to all URL-only memories
+ */
+router.post('/label-url-memories', async (c) => {
+  if (!checkAdminAuth(c)) {
+    return c.json({ success: false, error: 'Unauthorized' }, 401);
+  }
+
+  try {
+    // Update all URL-only memories to have tag = 'link'
+    const result = await c.env.DB.prepare(`
+      UPDATE memory
+      SET tag = 'link'
+      WHERE text LIKE 'http%'
+        AND text NOT LIKE '% %'
+        AND (tag IS NULL OR tag = '')
+    `).run();
+
+    return c.json({
+      success: true,
+      labeled: result.meta.changes || 0,
+      message: 'URL memories labeled with "link" tag'
+    });
+  } catch (error: any) {
+    console.error('[Admin] Label URL memories error:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+/**
+ * POST /api/admin/enrich-url-memories
+ * Find all URL-only memories, fetch content, and sync to Vectorize
+ */
+router.post('/enrich-url-memories', async (c) => {
+  if (!checkAdminAuth(c)) {
+    return c.json({ success: false, error: 'Unauthorized' }, 401);
+  }
+
+  try {
+    const { batchSize = 10, offset = 0, parallel = false } = await c.req.json().catch(() => ({}));
+
+    // Find memories that look like URL-only (text starts with http and is short like a URL)
+    // Re-process if content is still just the URL (length < 200 chars)
+    const memories = await c.env.DB.prepare(`
+      SELECT id, user_id, text, context_json
+      FROM memory
+      WHERE text LIKE 'http%'
+        AND LENGTH(text) < 200
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+    `).bind(batchSize, offset).all();
+
+    if (!memories.results || memories.results.length === 0) {
+      return c.json({
+        success: true,
+        message: 'No more URL-only memories to enrich',
+        enriched: 0,
+        offset,
+        hasMore: false
+      });
+    }
+
+    let enriched = 0;
+    let errors = 0;
+    const errorDetails: string[] = [];
+    const results: any[] = [];
+
+    for (const mem of memories.results as any[]) {
+      try {
+        const url = mem.text.trim();
+        const urlType = detectUrlType(url);
+        console.log('[Admin] Enriching URL memory:', mem.id, 'type:', urlType);
+
+        let extractedContent: {
+          title?: string;
+          description?: string;
+          text: string;
+          transcript?: string;
+          author?: string;
+          thumbnailUrl?: string;
+          metadata?: Record<string, any>;
+        } | null = null;
+
+        // Extract content based on URL type
+        if (urlType === 'youtube') {
+          extractedContent = await extractYouTubeContent(c.env, url);
+        } else if (urlType === 'twitter') {
+          extractedContent = await extractTwitterContent(url);
+        } else {
+          extractedContent = await extractWebpageContent(url);
+        }
+
+        if (!extractedContent || extractedContent.text === url) {
+          // Couldn't extract, but still generate embedding for the URL and set tag='link'
+          const embedding = await generateEmbedding(c.env, url);
+          if (embedding) {
+            await c.env.DB.prepare(`
+              UPDATE memory SET embedding_vector = ?, embedding_model = ?, tag = 'link' WHERE id = ?
+            `).bind(JSON.stringify(embedding), EMBEDDING_MODEL, mem.id).run();
+
+            if (c.env.VECTORIZE) {
+              await insertVector(c.env, mem.id, embedding, {
+                user_id: mem.user_id || 'default_user',
+                table: 'memory',
+                type: 'link',
+                subtype: urlType
+              });
+            }
+          }
+          results.push({ id: mem.id, type: urlType, enriched: false, reason: 'extraction_failed' });
+          continue;
+        }
+
+        // Build combined text
+        const combinedText = [
+          extractedContent.title,
+          extractedContent.description,
+          extractedContent.transcript || extractedContent.text
+        ].filter(Boolean).join(' ').substring(0, 10000);
+
+        // Generate embedding
+        const embedding = await generateEmbedding(c.env, combinedText);
+
+        // Merge with existing context
+        let existingContext: Record<string, any> = {};
+        try {
+          existingContext = mem.context_json ? JSON.parse(mem.context_json) : {};
+        } catch { /* ignore */ }
+
+        const newContext = {
+          ...existingContext,
+          url,
+          type: urlType,
+          title: extractedContent.title,
+          description: extractedContent.description,
+          author: extractedContent.author,
+          thumbnailUrl: extractedContent.thumbnailUrl,
+          hasTranscript: !!extractedContent.transcript,
+          enrichedAt: new Date().toISOString(),
+          ...extractedContent.metadata
+        };
+
+        // Update D1 - always set tag to 'link' for URL memories
+        await c.env.DB.prepare(`
+          UPDATE memory
+          SET text = ?, context_json = ?, tag = 'link',
+              embedding_vector = ?, embedding_model = ?
+          WHERE id = ?
+        `).bind(
+          combinedText,
+          JSON.stringify(newContext),
+          embedding ? JSON.stringify(embedding) : null,
+          embedding ? EMBEDDING_MODEL : null,
+          mem.id
+        ).run();
+
+        // Update Vectorize - use 'link' as primary type, urlType as subtype
+        if (embedding && c.env.VECTORIZE) {
+          await insertVector(c.env, mem.id, embedding, {
+            user_id: mem.user_id || 'default_user',
+            table: 'memory',
+            type: 'link',
+            subtype: urlType  // youtube, twitter, or webpage
+          });
+        }
+
+        enriched++;
+        results.push({
+          id: mem.id,
+          type: urlType,
+          enriched: true,
+          title: extractedContent.title?.substring(0, 50),
+          textLength: combinedText.length
+        });
+
+      } catch (err: any) {
+        errors++;
+        errorDetails.push(`${mem.id}: ${err.message}`);
+      }
+    }
+
+    return c.json({
+      success: true,
+      enriched,
+      errors,
+      errorDetails: errorDetails.slice(0, 5),
+      results,
+      offset,
+      nextOffset: offset + batchSize,
+      hasMore: memories.results.length === batchSize
+    });
+
+  } catch (error: any) {
+    console.error('[Admin] Enrich URL memories error:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+/**
+ * GET /api/admin/url-memories-status
+ * Check how many URL-only memories need enrichment
+ */
+router.get('/url-memories-status', async (c) => {
+  if (!checkAdminAuth(c)) {
+    return c.json({ success: false, error: 'Unauthorized' }, 401);
+  }
+
+  try {
+    const stats = await c.env.DB.prepare(`
+      SELECT
+        COUNT(*) as total_url_memories,
+        SUM(CASE WHEN LENGTH(text) >= 200 THEN 1 ELSE 0 END) as already_enriched,
+        SUM(CASE WHEN LENGTH(text) < 200 THEN 1 ELSE 0 END) as pending
+      FROM memory
+      WHERE tag = 'link' OR (text LIKE 'http%' AND LENGTH(text) < 200)
+    `).first<{
+      total_url_memories: number;
+      already_enriched: number;
+      pending: number;
+    }>();
+
+    // Get breakdown by URL type
+    const urlBreakdown = await c.env.DB.prepare(`
+      SELECT
+        CASE
+          WHEN LOWER(text) LIKE '%youtube.com%' OR LOWER(text) LIKE '%youtu.be%' THEN 'youtube'
+          WHEN LOWER(text) LIKE '%twitter.com%' OR LOWER(text) LIKE '%x.com%' THEN 'twitter'
+          ELSE 'webpage'
+        END as url_type,
+        COUNT(*) as count
+      FROM memory
+      WHERE text LIKE 'http%' AND LENGTH(text) < 200
+      GROUP BY url_type
+    `).all();
+
+    return c.json({
+      success: true,
+      stats: stats || { total_url_memories: 0, already_enriched: 0, pending: 0 },
+      pendingByType: urlBreakdown.results || [],
+      targetModel: EMBEDDING_MODEL
+    });
+
+  } catch (error: any) {
+    console.error('[Admin] URL memories status error:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// Helper functions for URL content extraction (same as memory.ts)
+function detectUrlType(url: string): 'youtube' | 'twitter' | 'webpage' {
+  const lowerUrl = url.toLowerCase();
+  if (lowerUrl.includes('youtube.com/watch') ||
+      lowerUrl.includes('youtu.be/') ||
+      lowerUrl.includes('youtube.com/shorts/')) {
+    return 'youtube';
+  }
+  if (lowerUrl.includes('twitter.com/') || lowerUrl.includes('x.com/')) {
+    return 'twitter';
+  }
+  return 'webpage';
+}
+
+function extractYouTubeVideoId(url: string): string | null {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+async function extractYouTubeContent(env: any, url: string): Promise<{
+  title?: string;
+  description?: string;
+  text: string;
+  transcript?: string;
+  author?: string;
+  thumbnailUrl?: string;
+  metadata?: Record<string, any>;
+} | null> {
+  const videoId = extractYouTubeVideoId(url);
+  if (!videoId) return null;
+
+  try {
+    const transcriptService = env.TRANSCRIPT_SERVICE;
+    let transcript = '';
+
+    if (transcriptService) {
+      const transcriptResponse = await transcriptService.fetch(
+        `https://youtube-transcript-worker/transcript/${videoId}?lang=en`
+      );
+      if (transcriptResponse.ok) {
+        const data = await transcriptResponse.json() as any;
+        if (data.success && data.text) {
+          transcript = data.text;
+        }
+      }
+    }
+
+    // Fetch metadata via oEmbed
+    let title = '';
+    let author = '';
+    let thumbnailUrl = '';
+
+    try {
+      const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
+      const oembedResponse = await fetch(oembedUrl);
+      if (oembedResponse.ok) {
+        const oembed = await oembedResponse.json() as any;
+        title = oembed.title || '';
+        author = oembed.author_name || '';
+        thumbnailUrl = oembed.thumbnail_url || '';
+      }
+    } catch (e) { /* ignore */ }
+
+    return {
+      title,
+      author,
+      thumbnailUrl,
+      text: title || url,
+      transcript,
+      metadata: { videoId, url: `https://www.youtube.com/watch?v=${videoId}` }
+    };
+  } catch (error) {
+    console.error('[Admin] YouTube extraction error:', error);
+    return { text: url, metadata: { videoId } };
+  }
+}
+
+async function extractTwitterContent(url: string): Promise<{
+  title?: string;
+  description?: string;
+  text: string;
+  author?: string;
+  metadata?: Record<string, any>;
+} | null> {
+  try {
+    const oembedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(url)}`;
+    const response = await fetch(oembedUrl);
+
+    if (response.ok) {
+      const oembed = await response.json() as any;
+      const htmlText = oembed.html || '';
+      const textMatch = htmlText.match(/<p[^>]*>(.*?)<\/p>/i);
+      const tweetText = textMatch ? textMatch[1].replace(/<[^>]*>/g, '') : '';
+
+      return {
+        text: tweetText || url,
+        author: oembed.author_name,
+        metadata: { authorUrl: oembed.author_url, url }
+      };
+    }
+  } catch (e) { /* ignore */ }
+
+  return { text: url, metadata: { url } };
+}
+
+async function extractWebpageContent(url: string): Promise<{
+  title?: string;
+  description?: string;
+  text: string;
+  author?: string;
+  metadata?: Record<string, any>;
+} | null> {
+  try {
+    const response = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; MyMemoryBot/1.0)' }
+    });
+
+    if (!response.ok) return null;
+
+    const html = await response.text();
+
+    // Extract title
+    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    const title = titleMatch ? titleMatch[1].trim() : '';
+
+    // Extract meta description
+    const descMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i) ||
+                      html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*name=["']description["']/i);
+    const description = descMatch ? descMatch[1].trim() : '';
+
+    // Extract Open Graph data
+    const ogTitleMatch = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i);
+    const ogDescMatch = html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i);
+    const ogImageMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i);
+
+    // Extract article content
+    let mainText = '';
+    const articleMatch = html.match(/<article[^>]*>([\s\S]*?)<\/article>/i);
+    if (articleMatch) {
+      mainText = articleMatch[1];
+    } else {
+      const mainMatch = html.match(/<main[^>]*>([\s\S]*?)<\/main>/i);
+      if (mainMatch) mainText = mainMatch[1];
+    }
+
+    // Clean HTML
+    const cleanText = mainText
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .substring(0, 8000);
+
+    const finalTitle = ogTitleMatch?.[1] || title;
+    const finalDesc = ogDescMatch?.[1] || description;
+
+    return {
+      title: finalTitle,
+      description: finalDesc,
+      text: cleanText || finalDesc || finalTitle || url,
+      metadata: { url, ogImage: ogImageMatch?.[1] }
+    };
+  } catch (error) {
+    console.error('[Admin] Webpage extraction error:', error);
+    return null;
+  }
+}
+
 export default router;
