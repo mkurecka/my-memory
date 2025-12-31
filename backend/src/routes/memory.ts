@@ -3,6 +3,7 @@ import type { Env, Memory } from '../types';
 import { verifyJWT } from '../utils/jwt';
 import { generateId } from '../utils/id';
 import { deleteVector, generateEmbedding, insertVector, EMBEDDING_MODEL } from '../utils/embeddings';
+import { detectUrlType, extractYouTubeVideoId } from '../utils/url';
 
 const memory = new Hono<{ Bindings: Env }>();
 
@@ -413,43 +414,7 @@ memory.delete('/:id', authMiddleware, async (c) => {
   }
 });
 
-/**
- * Detect URL type from URL string
- */
-function detectUrlType(url: string): 'youtube' | 'twitter' | 'webpage' {
-  const lowerUrl = url.toLowerCase();
-
-  // YouTube patterns
-  if (lowerUrl.includes('youtube.com/watch') ||
-      lowerUrl.includes('youtu.be/') ||
-      lowerUrl.includes('youtube.com/shorts/')) {
-    return 'youtube';
-  }
-
-  // Twitter/X patterns
-  if (lowerUrl.includes('twitter.com/') ||
-      lowerUrl.includes('x.com/')) {
-    return 'twitter';
-  }
-
-  return 'webpage';
-}
-
-/**
- * Extract YouTube video ID from URL
- */
-function extractYouTubeVideoId(url: string): string | null {
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
-    /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/
-  ];
-
-  for (const pattern of patterns) {
-    const match = url.match(pattern);
-    if (match) return match[1];
-  }
-  return null;
-}
+// URL helpers (detectUrlType, extractYouTubeVideoId) imported from ../utils/url
 
 /**
  * Extract content from YouTube video

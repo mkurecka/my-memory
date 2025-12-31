@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { generateEmbedding, insertVector, EMBEDDING_MODEL } from '../utils/embeddings';
+import { detectUrlType, extractYouTubeVideoId } from '../utils/url';
 
 const router = new Hono<{ Bindings: Env }>();
 
@@ -702,31 +703,7 @@ router.get('/url-memories-status', async (c) => {
   }
 });
 
-// Helper functions for URL content extraction (same as memory.ts)
-function detectUrlType(url: string): 'youtube' | 'twitter' | 'webpage' {
-  const lowerUrl = url.toLowerCase();
-  if (lowerUrl.includes('youtube.com/watch') ||
-      lowerUrl.includes('youtu.be/') ||
-      lowerUrl.includes('youtube.com/shorts/')) {
-    return 'youtube';
-  }
-  if (lowerUrl.includes('twitter.com/') || lowerUrl.includes('x.com/')) {
-    return 'twitter';
-  }
-  return 'webpage';
-}
-
-function extractYouTubeVideoId(url: string): string | null {
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
-    /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/
-  ];
-  for (const pattern of patterns) {
-    const match = url.match(pattern);
-    if (match) return match[1];
-  }
-  return null;
-}
+// URL helpers (detectUrlType, extractYouTubeVideoId) imported from ../utils/url
 
 async function extractYouTubeContent(env: any, url: string): Promise<{
   title?: string;
