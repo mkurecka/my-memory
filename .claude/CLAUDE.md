@@ -156,6 +156,63 @@ chat_history    # Chat with memories history
 **Admin** (`/api/admin/`)
 - `POST /migrate-vectors` - Migrate embeddings to Vectorize
 
+**MCP** (`/mcp`)
+- `GET /` - Server info (discovery)
+- `POST /` - JSON-RPC endpoint for MCP protocol
+
+### MCP Server (Model Context Protocol)
+
+The backend includes an MCP server for Claude Desktop/Code integration.
+
+**Endpoint**: `https://my-memory.kureckamichal.workers.dev/mcp`
+
+#### Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `search_memory` | Semantic search through saved memories |
+| `save_memory` | Save new content to memory |
+| `list_memories` | List recent memories with optional filters |
+| `get_memory` | Get specific memory by ID |
+| `delete_memory` | Delete a memory by ID |
+
+#### Authentication
+
+API key via header or query parameter:
+- **Header**: `Authorization: Bearer mm_your_api_key`
+- **Query param**: `?key=mm_your_api_key` (for Claude.ai custom connectors)
+
+#### Connect via Claude Code
+
+Add to `~/.claude.json`:
+
+```json
+{
+  "mcpServers": {
+    "my-memory": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://my-memory.kureckamichal.workers.dev/mcp",
+        "--header",
+        "Authorization:Bearer mm_your_api_key",
+        "--transport",
+        "http-first"
+      ]
+    }
+  }
+}
+```
+
+#### Connect via Claude.ai Custom Connector
+
+1. Go to Claude.ai Settings → Connected apps → Add more
+2. Select "Custom Connector"
+3. Enter URL: `https://my-memory.kureckamichal.workers.dev/mcp?key=mm_your_api_key`
+4. Connect
+
 ### CORS Configuration
 
 ```typescript
