@@ -1,29 +1,12 @@
 import { Hono } from 'hono';
 import type { Env, Memory } from '../types';
-import { verifyJWT } from '../utils/jwt';
 import { generateId } from '../utils/id';
 import { deleteVector, generateEmbedding, insertVector, EMBEDDING_MODEL } from '../utils/embeddings';
 import { detectUrlType, extractYouTubeVideoId } from '../utils/url';
+import { createAuthMiddleware } from '../utils/auth-middleware';
 
 const memory = new Hono<{ Bindings: Env }>();
-
-// Authentication middleware
-async function authMiddleware(c: any, next: any) {
-  const authHeader = c.req.header('Authorization');
-  if (!authHeader) {
-    return c.json({ success: false, error: 'No authorization header' }, 401);
-  }
-
-  const token = authHeader.replace('Bearer ', '');
-  const payload = await verifyJWT(token, c.env.JWT_SECRET);
-
-  if (!payload) {
-    return c.json({ success: false, error: 'Invalid or expired token' }, 401);
-  }
-
-  c.set('userId', payload.userId);
-  await next();
-}
+const authMiddleware = createAuthMiddleware();
 
 /**
  * Generate a simple hash for deduplication
