@@ -22,13 +22,20 @@ const mcp = new Hono<{ Bindings: Env }>();
 const MCP_VERSION = '2024-11-05';
 
 /**
- * Extract user ID from auth header if present
+ * Extract user ID from auth header or query param
+ * Supports: Authorization header (Bearer token/API key) or ?key= query param
  */
 async function getUserFromAuth(c: any): Promise<string | null> {
+  // Try Authorization header first
   const authHeader = c.req.header('Authorization');
-  if (!authHeader) return null;
+  let token = authHeader ? authHeader.replace('Bearer ', '') : null;
 
-  const token = authHeader.replace('Bearer ', '');
+  // Fallback to query param for Claude custom connectors
+  if (!token) {
+    token = c.req.query('key');
+  }
+
+  if (!token) return null;
 
   // Try API key first (mm_ prefix)
   if (token.startsWith('mm_')) {
