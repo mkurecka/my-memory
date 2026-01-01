@@ -4,26 +4,51 @@
  *
  * This implementation uses the stateless "Streamable HTTP" transport which is
  * better suited for Cloudflare Workers than SSE (which requires persistent connections).
+ *
+ * Auth: Optional via Authorization header (Bearer token or API key)
+ * - initialize, tools/list work without auth
+ * - Tool calls require auth to access user data
  */
 
 import { Hono } from 'hono';
 import type { Env } from '../types';
-import { createAuthMiddleware } from '../utils/auth-middleware';
+import { verifyJWT } from '../utils/jwt';
 import { generateEmbedding, vectorSearch } from '../utils/embeddings';
 import { generateId } from '../utils/id';
 
 const mcp = new Hono<{ Bindings: Env }>();
-const authMiddleware = createAuthMiddleware();
 
 // MCP Protocol version
 const MCP_VERSION = '2024-11-05';
 
 /**
+ * Extract user ID from auth header if present
+ */
+async function getUserFromAuth(c: any): Promise<string | null> {
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader) return null;
+
+  const token = authHeader.replace('Bearer ', '');
+
+  // Try API key first (mm_ prefix)
+  if (token.startsWith('mm_')) {
+    const user = await c.env.DB.prepare(
+      'SELECT id FROM users WHERE api_key = ?'
+    ).bind(token).first();
+    return user?.id || null;
+  }
+
+  // Try JWT
+  const payload = await verifyJWT(token, c.env.JWT_SECRET);
+  return payload?.userId || null;
+}
+
+/**
  * POST /mcp - Main MCP endpoint
  * Handles all JSON-RPC requests and returns responses directly
  */
-mcp.post('/', authMiddleware, async (c) => {
-  const userId = c.get('userId');
+mcp.post('/', async (c) => {
+  const userId = await getUserFromAuth(c);
   const request = await c.req.json();
 
   // Handle batch requests
@@ -60,12 +85,12 @@ mcp.get('/', (c) => {
  */
 async function handleSingleRequest(
   env: Env,
-  userId: string,
+  userId: string | null,
   request: any
 ): Promise<any> {
   const { jsonrpc = '2.0', id, method, params = {} } = request;
 
-  console.log(`[MCP] Request: ${method}`, params);
+  console.log(`[MCP] Request: ${method}`, userId ? `(user: ${userId})` : '(no auth)');
 
   try {
     const result = await handleMcpRequest(env, userId, method, params);
@@ -76,7 +101,7 @@ async function handleSingleRequest(
       jsonrpc,
       id,
       error: {
-        code: -32603,
+        code: error.code || -32603,
         message: error.message || 'Internal error'
       }
     };
@@ -88,7 +113,7 @@ async function handleSingleRequest(
  */
 async function handleMcpRequest(
   env: Env,
-  userId: string,
+  userId: string | null,
   method: string,
   params: any
 ): Promise<any> {
@@ -103,12 +128,26 @@ async function handleMcpRequest(
       return handleListTools();
 
     case 'tools/call':
+      // Tool calls require authentication
+      if (!userId) {
+        const error = new Error('Authentication required. Provide API key via Authorization header.');
+        (error as any).code = -32001;
+        throw error;
+      }
       return handleToolCall(env, userId, params);
 
     case 'resources/list':
+      if (!userId) {
+        return { resources: [] }; // Return empty list if not authenticated
+      }
       return handleListResources(env, userId);
 
     case 'resources/read':
+      if (!userId) {
+        const error = new Error('Authentication required to read resources.');
+        (error as any).code = -32001;
+        throw error;
+      }
       return handleReadResource(env, userId, params);
 
     case 'ping':
