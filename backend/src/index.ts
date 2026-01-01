@@ -21,6 +21,7 @@ import exportRoutes from './routes/export';
 import tasksRoutes from './routes/tasks';
 import adminRoutes from './routes/admin';
 import chatRoutes from './routes/chat';
+import mcpRoutes from './routes/mcp';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -185,6 +186,9 @@ app.route('/api/admin', adminRoutes);
 
 // Chat routes (RAG-powered conversations)
 app.route('/api/chat', chatRoutes);
+
+// MCP routes (Model Context Protocol for Claude Desktop/Code)
+app.route('/mcp', mcpRoutes);
 
 // 404 handler
 app.notFound((c) => {
