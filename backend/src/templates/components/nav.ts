@@ -16,6 +16,7 @@ export function nav({ currentPage, apiBase }: NavProps): string {
         { path: '/dashboard', label: 'Overview', icon: '📊' },
         { path: '/dashboard/all-content', label: 'All Content', icon: '📚' },
         { path: '/dashboard/memories', label: 'Memories', icon: '🧠' },
+        { path: '/dashboard/insights', label: 'Insights', icon: '💡' },
         { path: '/dashboard/ai-content', label: 'AI Content', icon: '✨' },
       ]
     },

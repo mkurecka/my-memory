@@ -3,6 +3,7 @@ import type { Env } from '../types';
 import { generateEmbedding, insertVector, EMBEDDING_MODEL } from '../utils/embeddings';
 import { detectUrlType } from '../utils/url';
 import { extractYouTubeContent, extractTwitterContent, extractWebpageContent } from '../utils/content-extraction';
+import { analyzeMemory } from '../utils/memory-analyzer';
 
 const router = new Hono<{ Bindings: Env }>();
 
@@ -700,6 +701,298 @@ router.get('/url-memories-status', async (c) => {
 
   } catch (error: any) {
     console.error('[Admin] URL memories status error:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+/**
+ * GET /api/admin/analyze-status
+ * Check how many memories have been analyzed
+ */
+router.get('/analyze-status', async (c) => {
+  if (!checkAdminAuth(c)) {
+    return c.json({ success: false, error: 'Unauthorized' }, 401);
+  }
+
+  try {
+    const stats = await c.env.DB.prepare(`
+      SELECT
+        COUNT(*) as total,
+        SUM(CASE WHEN context_json LIKE '%"analysis":%' THEN 1 ELSE 0 END) as analyzed,
+        SUM(CASE WHEN context_json NOT LIKE '%"analysis":%' OR context_json IS NULL THEN 1 ELSE 0 END) as pending
+      FROM memory
+    `).first<{ total: number; analyzed: number; pending: number }>();
+
+    // Get breakdown by category for analyzed
+    const categoryBreakdown = await c.env.DB.prepare(`
+      SELECT
+        json_extract(context_json, '$.analysis.category') as category,
+        COUNT(*) as count
+      FROM memory
+      WHERE context_json LIKE '%"analysis":%'
+      GROUP BY category
+      ORDER BY count DESC
+    `).all();
+
+    // Get breakdown by action priority
+    const priorityBreakdown = await c.env.DB.prepare(`
+      SELECT
+        json_extract(context_json, '$.analysis.actionPriority') as priority,
+        COUNT(*) as count
+      FROM memory
+      WHERE context_json LIKE '%"analysis":%'
+      GROUP BY priority
+    `).all();
+
+    return c.json({
+      success: true,
+      stats: stats || { total: 0, analyzed: 0, pending: 0 },
+      byCategory: categoryBreakdown.results || [],
+      byPriority: priorityBreakdown.results || []
+    });
+  } catch (error: any) {
+    console.error('[Admin] Analyze status error:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+/**
+ * POST /api/admin/batch-analyze
+ * Batch analyze memories that don't have analysis yet
+ */
+router.post('/batch-analyze', async (c) => {
+  if (!checkAdminAuth(c)) {
+    return c.json({ success: false, error: 'Unauthorized' }, 401);
+  }
+
+  try {
+    const { batchSize = 5, offset = 0 } = await c.req.json().catch(() => ({}));
+
+    // Find memories without analysis
+    const memories = await c.env.DB.prepare(`
+      SELECT id, text, context_json
+      FROM memory
+      WHERE context_json NOT LIKE '%"analysis":%' OR context_json IS NULL
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+    `).bind(batchSize, offset).all();
+
+    if (!memories.results || memories.results.length === 0) {
+      return c.json({
+        success: true,
+        message: 'No more memories to analyze',
+        analyzed: 0,
+        offset,
+        hasMore: false
+      });
+    }
+
+    let analyzed = 0;
+    let errors = 0;
+    const errorDetails: string[] = [];
+    const results: any[] = [];
+
+    for (const mem of memories.results as any[]) {
+      try {
+        let context: Record<string, any> = {};
+        try {
+          context = mem.context_json ? JSON.parse(mem.context_json) : {};
+        } catch { /* ignore */ }
+
+        const analysis = await analyzeMemory(c.env, mem.text, context);
+
+        if (!analysis) {
+          errors++;
+          errorDetails.push(`${mem.id}: Failed to analyze`);
+          continue;
+        }
+
+        // Update context with analysis
+        context.analysis = analysis;
+
+        await c.env.DB
+          .prepare('UPDATE memory SET context_json = ? WHERE id = ?')
+          .bind(JSON.stringify(context), mem.id)
+          .run();
+
+        analyzed++;
+        results.push({
+          id: mem.id,
+          category: analysis.category,
+          topics: analysis.topics?.slice(0, 3),
+          actionPriority: analysis.actionPriority,
+          topActions: analysis.suggestedActions?.slice(0, 2).map((a: any) => a.type)
+        });
+
+        // Small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+      } catch (err: any) {
+        errors++;
+        errorDetails.push(`${mem.id}: ${err.message}`);
+      }
+    }
+
+    return c.json({
+      success: true,
+      analyzed,
+      errors,
+      errorDetails: errorDetails.slice(0, 5),
+      results,
+      offset,
+      nextOffset: offset + batchSize,
+      hasMore: memories.results.length === batchSize
+    });
+
+  } catch (error: any) {
+    console.error('[Admin] Batch analyze error:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+/**
+ * POST /api/admin/batch-analyze-posts
+ * Batch analyze posts (tweets, videos) that don't have analysis yet
+ */
+router.post('/batch-analyze-posts', async (c) => {
+  if (!checkAdminAuth(c)) {
+    return c.json({ success: false, error: 'Unauthorized' }, 401);
+  }
+
+  try {
+    const { batchSize = 5, offset = 0 } = await c.req.json().catch(() => ({}));
+
+    // Find posts without analysis
+    const posts = await c.env.DB.prepare(`
+      SELECT id, type, original_text, context_json
+      FROM posts
+      WHERE (context_json NOT LIKE '%"analysis":%' OR context_json IS NULL)
+        AND original_text IS NOT NULL AND original_text != ''
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+    `).bind(batchSize, offset).all();
+
+    if (!posts.results || posts.results.length === 0) {
+      return c.json({
+        success: true,
+        message: 'No more posts to analyze',
+        analyzed: 0,
+        offset,
+        hasMore: false
+      });
+    }
+
+    let analyzed = 0;
+    let errors = 0;
+    const errorDetails: string[] = [];
+    const results: any[] = [];
+
+    for (const post of posts.results as any[]) {
+      try {
+        let context: Record<string, any> = {};
+        try {
+          context = post.context_json ? JSON.parse(post.context_json) : {};
+        } catch { /* ignore */ }
+
+        const analysis = await analyzeMemory(c.env, post.original_text, context);
+
+        if (!analysis) {
+          errors++;
+          errorDetails.push(`${post.id}: Failed to analyze`);
+          continue;
+        }
+
+        // Update context with analysis
+        context.analysis = analysis;
+
+        await c.env.DB
+          .prepare('UPDATE posts SET context_json = ? WHERE id = ?')
+          .bind(JSON.stringify(context), post.id)
+          .run();
+
+        analyzed++;
+        results.push({
+          id: post.id,
+          type: post.type,
+          category: analysis.category,
+          topics: analysis.topics?.slice(0, 3),
+          actionPriority: analysis.actionPriority,
+          topActions: analysis.suggestedActions?.slice(0, 2).map((a: any) => a.type)
+        });
+
+        // Small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+      } catch (err: any) {
+        errors++;
+        errorDetails.push(`${post.id}: ${err.message}`);
+      }
+    }
+
+    return c.json({
+      success: true,
+      analyzed,
+      errors,
+      errorDetails: errorDetails.slice(0, 5),
+      results,
+      offset,
+      nextOffset: offset + batchSize,
+      hasMore: posts.results.length === batchSize
+    });
+
+  } catch (error: any) {
+    console.error('[Admin] Batch analyze posts error:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+/**
+ * POST /api/admin/analyze-all
+ * Analyze all unanalyzed memories (for small datasets)
+ */
+router.post('/analyze-all', async (c) => {
+  if (!checkAdminAuth(c)) {
+    return c.json({ success: false, error: 'Unauthorized' }, 401);
+  }
+
+  try {
+    const { batchSize = 5 } = await c.req.json().catch(() => ({}));
+
+    let totalAnalyzed = 0;
+    let totalErrors = 0;
+    let hasMore = true;
+    let offset = 0;
+
+    while (hasMore) {
+      // Call batch-analyze
+      const res = await fetch(c.req.url.replace('/analyze-all', '/batch-analyze'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Key': ADMIN_KEY
+        },
+        body: JSON.stringify({ batchSize, offset })
+      });
+
+      const data = await res.json() as any;
+      totalAnalyzed += data.analyzed || 0;
+      totalErrors += data.errors || 0;
+      hasMore = data.hasMore;
+      offset = data.nextOffset || offset + batchSize;
+
+      // Stop if we hit errors or no progress
+      if (data.analyzed === 0 && data.errors > 0) break;
+    }
+
+    return c.json({
+      success: true,
+      message: 'Full analysis complete',
+      totalAnalyzed,
+      totalErrors
+    });
+
+  } catch (error: any) {
+    console.error('[Admin] Analyze all error:', error);
     return c.json({ success: false, error: error.message }, 500);
   }
 });

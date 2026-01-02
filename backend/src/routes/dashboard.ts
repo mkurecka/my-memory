@@ -11,6 +11,7 @@ import { settingsPage } from '../templates/pages/settings';
 import { allContentPage } from '../templates/pages/all-content';
 import { tasksPage } from '../templates/pages/tasks';
 import { chatPage } from '../templates/pages/chat';
+import { insightsPage } from '../templates/pages/insights';
 import { AirtableService } from '../services/airtable';
 
 const router = new Hono<{ Bindings: Env }>();
@@ -290,6 +291,55 @@ router.get('/chat', async (c) => {
   } catch (error: any) {
     console.error('Chat page error:', error);
     return c.html(errorPage('Chat Error', error.message), 500);
+  }
+});
+
+/**
+ * GET /dashboard/insights
+ * AI-powered memory insights and content suggestions
+ */
+router.get('/insights', async (c) => {
+  try {
+    const apiBase = c.env.APP_URL;
+
+    // Get analysis status counts from both memory and posts tables
+    const [
+      memoryAnalyzedResult,
+      memoryPendingResult,
+      postsAnalyzedResult,
+      postsPendingResult
+    ] = await Promise.all([
+      c.env.DB.prepare(
+        "SELECT COUNT(*) as count FROM memory WHERE context_json LIKE '%\"analysis\":%'"
+      ).first<any>(),
+      c.env.DB.prepare(
+        "SELECT COUNT(*) as count FROM memory WHERE context_json IS NULL OR context_json NOT LIKE '%\"analysis\":%'"
+      ).first<any>(),
+      c.env.DB.prepare(
+        "SELECT COUNT(*) as count FROM posts WHERE context_json LIKE '%\"analysis\":%'"
+      ).first<any>(),
+      c.env.DB.prepare(
+        "SELECT COUNT(*) as count FROM posts WHERE (context_json IS NULL OR context_json NOT LIKE '%\"analysis\":%') AND original_text IS NOT NULL AND original_text != ''"
+      ).first<any>()
+    ]);
+
+    const analyzedResult = {
+      count: (memoryAnalyzedResult?.count || 0) + (postsAnalyzedResult?.count || 0)
+    };
+    const pendingResult = {
+      count: (memoryPendingResult?.count || 0) + (postsPendingResult?.count || 0)
+    };
+
+    const html = insightsPage({
+      apiBase,
+      analyzedCount: analyzedResult?.count || 0,
+      pendingCount: pendingResult?.count || 0
+    });
+    return c.html(html);
+
+  } catch (error: any) {
+    console.error('Insights page error:', error);
+    return c.html(errorPage('Insights Error', error.message), 500);
   }
 });
 

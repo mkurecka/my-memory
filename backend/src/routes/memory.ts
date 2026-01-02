@@ -6,6 +6,7 @@ import { detectUrlType } from '../utils/url';
 import { createAuthMiddleware } from '../utils/auth-middleware';
 import { simpleHash } from '../utils/helpers';
 import { extractYouTubeContent, extractTwitterContent, extractWebpageContent } from '../utils/content-extraction';
+import { analyzeMemory, type MemoryAnalysis } from '../utils/memory-analyzer';
 
 const memory = new Hono<{ Bindings: Env }>();
 const authMiddleware = createAuthMiddleware();
@@ -173,6 +174,11 @@ memory.post('/', authMiddleware, async (c) => {
       console.log('[Memory] Created with embedding:', memoryId);
     }
 
+    // Trigger AI analysis in background (non-blocking)
+    c.executionCtx.waitUntil(
+      analyzeMemoryAndUpdate(c.env, memoryId, finalText, finalContext)
+    );
+
     return c.json({
       success: true,
       memoryId,
@@ -230,14 +236,14 @@ memory.get('/', authMiddleware, async (c) => {
 });
 
 // GET /api/memory/:id - Get single memory
-memory.get('/:id', authMiddleware, async (c) => {
+// Public endpoint for dashboard
+memory.get('/:id', async (c) => {
   try {
-    const userId = c.get('userId');
     const memoryId = c.req.param('id');
 
     const memoryItem = await c.env.DB
-      .prepare('SELECT * FROM memory WHERE id = ? AND user_id = ?')
-      .bind(memoryId, userId)
+      .prepare('SELECT * FROM memory WHERE id = ?')
+      .bind(memoryId)
       .first<Memory>();
 
     if (!memoryItem) {
@@ -547,5 +553,327 @@ memory.get('/tags/list', authMiddleware, async (c) => {
     }, 500);
   }
 });
+
+// POST /api/memory/:id/analyze - Analyze a specific memory with AI
+memory.post('/:id/analyze', authMiddleware, async (c) => {
+  try {
+    const userId = c.get('userId');
+    const memoryId = c.req.param('id');
+
+    const existing = await c.env.DB
+      .prepare('SELECT id, text, context_json FROM memory WHERE id = ? AND user_id = ?')
+      .bind(memoryId, userId)
+      .first<{ id: string; text: string; context_json: string | null }>();
+
+    if (!existing) {
+      return c.json({ success: false, error: 'Memory not found' }, 404);
+    }
+
+    let context: Record<string, any> = {};
+    try {
+      context = existing.context_json ? JSON.parse(existing.context_json) : {};
+    } catch { /* ignore */ }
+
+    const analysis = await analyzeMemory(c.env, existing.text, context);
+
+    if (!analysis) {
+      return c.json({
+        success: false,
+        error: 'Failed to analyze memory. Check OpenRouter API key.'
+      }, 500);
+    }
+
+    // Update context with analysis
+    context.analysis = analysis;
+
+    await c.env.DB
+      .prepare('UPDATE memory SET context_json = ? WHERE id = ?')
+      .bind(JSON.stringify(context), memoryId)
+      .run();
+
+    return c.json({
+      success: true,
+      memoryId,
+      analysis
+    });
+  } catch (error: any) {
+    console.error('[Memory] analyze error:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// GET /api/memory/insights - Get aggregated insights from analyzed content (memories + posts)
+// Public endpoint for dashboard (no auth required)
+memory.get('/insights/overview', async (c) => {
+  try {
+    // Fetch all memories with analysis
+    const memoriesResult = await c.env.DB
+      .prepare(`
+        SELECT id, text, context_json, tag, created_at, 'memory' as source_type
+        FROM memory
+        WHERE context_json LIKE '%"analysis":%'
+        ORDER BY created_at DESC
+      `)
+      .all<{ id: string; text: string; context_json: string; tag: string; created_at: number; source_type: string }>();
+
+    // Fetch all posts (tweets, videos) with analysis
+    const postsResult = await c.env.DB
+      .prepare(`
+        SELECT id, original_text as text, context_json, type as tag, created_at, 'post' as source_type
+        FROM posts
+        WHERE context_json LIKE '%"analysis":%'
+        ORDER BY created_at DESC
+      `)
+      .all<{ id: string; text: string; context_json: string; tag: string; created_at: number; source_type: string }>();
+
+    // Combine both
+    const memories = [...(memoriesResult.results || []), ...(postsResult.results || [])];
+
+    // Aggregate insights
+    const insights = {
+      totalAnalyzed: memories.length,
+      byCategory: {} as Record<string, number>,
+      byActionPriority: { high: 0, medium: 0, low: 0 },
+      topActions: {} as Record<string, number>,
+      topTopics: {} as Record<string, number>,
+      contentPotential: {
+        twitter: [] as any[],
+        linkedin: [] as any[],
+        instagram: [] as any[],
+        youtube: [] as any[],
+        tiktok: [] as any[],
+        article: [] as any[]
+      },
+      businessIdeas: [] as any[],
+      actionableItems: [] as any[]
+    };
+
+    for (const mem of memories) {
+      try {
+        const context = JSON.parse(mem.context_json);
+        const analysis = context.analysis as MemoryAnalysis;
+        if (!analysis) continue;
+
+        // Count categories
+        insights.byCategory[analysis.category] = (insights.byCategory[analysis.category] || 0) + 1;
+
+        // Count priority
+        if (analysis.actionPriority) {
+          insights.byActionPriority[analysis.actionPriority]++;
+        }
+
+        // Count topics
+        for (const topic of analysis.topics || []) {
+          insights.topTopics[topic] = (insights.topTopics[topic] || 0) + 1;
+        }
+
+        // Count actions
+        for (const action of analysis.suggestedActions || []) {
+          insights.topActions[action.type] = (insights.topActions[action.type] || 0) + 1;
+        }
+
+        // Collect high-potential content
+        const memSummary = {
+          id: mem.id,
+          title: context.title || mem.text.substring(0, 80),
+          sourceType: (mem as any).source_type || 'memory',
+          tag: mem.tag,
+          analysis: analysis
+        };
+
+        if (analysis.contentPotential?.twitter?.score >= 70) {
+          insights.contentPotential.twitter.push(memSummary);
+        }
+        if (analysis.contentPotential?.linkedin?.score >= 70) {
+          insights.contentPotential.linkedin.push(memSummary);
+        }
+        if (analysis.contentPotential?.instagram?.score >= 70) {
+          insights.contentPotential.instagram.push(memSummary);
+        }
+        if (analysis.contentPotential?.youtube?.score >= 70) {
+          insights.contentPotential.youtube.push(memSummary);
+        }
+        if (analysis.contentPotential?.tiktok?.score >= 70) {
+          insights.contentPotential.tiktok.push(memSummary);
+        }
+        if (analysis.contentPotential?.article?.score >= 70) {
+          insights.contentPotential.article.push(memSummary);
+        }
+
+        // Collect business ideas
+        if (analysis.businessRelevance?.score >= 70) {
+          insights.businessIdeas.push(memSummary);
+        }
+
+        // High priority actionable items
+        if (analysis.actionPriority === 'high') {
+          insights.actionableItems.push(memSummary);
+        }
+
+      } catch { /* skip invalid */ }
+    }
+
+    // Sort content potential by score
+    for (const platform of Object.keys(insights.contentPotential) as Array<keyof typeof insights.contentPotential>) {
+      insights.contentPotential[platform].sort((a, b) =>
+        (b.analysis.contentPotential?.[platform]?.score || 0) -
+        (a.analysis.contentPotential?.[platform]?.score || 0)
+      );
+      insights.contentPotential[platform] = insights.contentPotential[platform].slice(0, 10);
+    }
+
+    // Sort topics and actions
+    const sortedTopics = Object.entries(insights.topTopics)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 20);
+    const sortedActions = Object.entries(insights.topActions)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 15);
+
+    return c.json({
+      success: true,
+      insights: {
+        ...insights,
+        topTopics: Object.fromEntries(sortedTopics),
+        topActions: Object.fromEntries(sortedActions),
+        businessIdeas: insights.businessIdeas.slice(0, 10),
+        actionableItems: insights.actionableItems.slice(0, 20)
+      }
+    });
+  } catch (error: any) {
+    console.error('[Memory] insights error:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// GET /api/memory/insights/item/:id - Get individual item details (public endpoint for insights modal)
+memory.get('/insights/item/:id', async (c) => {
+  try {
+    const { id } = c.req.param();
+
+    // Try to find in memory table first
+    let item = await c.env.DB.prepare(`
+      SELECT id, text, context_json, tag, created_at, 'memory' as source_type
+      FROM memory
+      WHERE id = ?
+    `).bind(id).first<{ id: string; text: string; context_json: string; tag: string; created_at: number; source_type: string }>();
+
+    // If not found, try posts table
+    if (!item) {
+      item = await c.env.DB.prepare(`
+        SELECT id, original_text as text, context_json, type as tag, created_at, 'post' as source_type
+        FROM posts
+        WHERE id = ?
+      `).bind(id).first();
+    }
+
+    if (!item) {
+      return c.json({ success: false, error: 'Item not found' }, 404);
+    }
+
+    let context = {};
+    let analysis = {};
+    try {
+      context = JSON.parse(item.context_json || '{}');
+      analysis = (context as any).analysis || {};
+    } catch { /* ignore parse error */ }
+
+    return c.json({
+      success: true,
+      item: {
+        id: item.id,
+        text: item.text,
+        analysis: analysis,
+        context: {
+          ...(context as object),
+          title: (context as any).title || (context as any).extractedTitle || item.text?.substring(0, 100),
+          type: item.tag
+        },
+        sourceType: item.source_type,
+        tag: item.tag,
+        createdAt: item.created_at
+      }
+    });
+  } catch (error: any) {
+    console.error('[Memory] insights/item error:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// GET /api/memory/insights/by-action/:action - Get memories by suggested action type
+// Public endpoint for dashboard
+memory.get('/insights/by-action/:action', async (c) => {
+  try {
+    const actionType = c.req.param('action');
+
+    const result = await c.env.DB
+      .prepare(`
+        SELECT id, text, context_json, tag, created_at
+        FROM memory
+        WHERE context_json LIKE ?
+        ORDER BY created_at DESC
+      `)
+      .bind(`%"type":"${actionType}"%`)
+      .all<{ id: string; text: string; context_json: string; tag: string; created_at: number }>();
+
+    const memories = (result.results || []).map(mem => {
+      let context: any = {};
+      try { context = JSON.parse(mem.context_json); } catch { /* ignore */ }
+      return {
+        id: mem.id,
+        title: context.title || mem.text.substring(0, 100),
+        text: mem.text.substring(0, 300),
+        tag: mem.tag,
+        createdAt: mem.created_at,
+        analysis: context.analysis
+      };
+    }).filter(m => {
+      // Verify the action type is in suggestedActions
+      return m.analysis?.suggestedActions?.some((a: any) => a.type === actionType);
+    });
+
+    return c.json({
+      success: true,
+      action: actionType,
+      count: memories.length,
+      memories
+    });
+  } catch (error: any) {
+    console.error('[Memory] by-action error:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+/**
+ * Helper: Analyze memory and update context_json
+ */
+async function analyzeMemoryAndUpdate(
+  env: Env,
+  memoryId: string,
+  text: string,
+  context: Record<string, any>
+): Promise<void> {
+  try {
+    console.log('[Memory] Starting background analysis for:', memoryId);
+
+    const analysis = await analyzeMemory(env, text, context);
+
+    if (analysis) {
+      // Merge analysis into context
+      const updatedContext = { ...context, analysis };
+
+      await env.DB
+        .prepare('UPDATE memory SET context_json = ? WHERE id = ?')
+        .bind(JSON.stringify(updatedContext), memoryId)
+        .run();
+
+      console.log('[Memory] Analysis saved for:', memoryId, 'category:', analysis.category);
+    } else {
+      console.log('[Memory] No analysis generated for:', memoryId);
+    }
+  } catch (error: any) {
+    console.error('[Memory] Background analysis error:', error.message);
+  }
+}
 
 export default memory;
