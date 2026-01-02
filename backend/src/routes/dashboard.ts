@@ -12,7 +12,9 @@ import { allContentPage } from '../templates/pages/all-content';
 import { tasksPage } from '../templates/pages/tasks';
 import { chatPage } from '../templates/pages/chat';
 import { insightsPage } from '../templates/pages/insights';
+import { etsyPage } from '../templates/pages/etsy';
 import { AirtableService } from '../services/airtable';
+import { EtsyService } from '../services/etsy';
 
 const router = new Hono<{ Bindings: Env }>();
 
@@ -340,6 +342,37 @@ router.get('/insights', async (c) => {
   } catch (error: any) {
     console.error('Insights page error:', error);
     return c.html(errorPage('Insights Error', error.message), 500);
+  }
+});
+
+/**
+ * GET /dashboard/etsy
+ * Etsy product management page - products, images, listings from Airtable
+ */
+router.get('/etsy', async (c) => {
+  try {
+    const apiBase = c.env.APP_URL;
+    const etsy = new EtsyService(c.env);
+
+    // Check if Etsy Airtable is configured
+    const isConfigured = etsy.isConfigured();
+
+    // Get summary stats if configured
+    let summary = null;
+    if (isConfigured) {
+      try {
+        summary = await etsy.getSummary();
+      } catch (err) {
+        console.error('Failed to load Etsy summary:', err);
+      }
+    }
+
+    const html = etsyPage({ apiBase, isConfigured, summary });
+    return c.html(html);
+
+  } catch (error: any) {
+    console.error('Etsy page error:', error);
+    return c.html(errorPage('Etsy Error', error.message), 500);
   }
 });
 

@@ -22,6 +22,7 @@ import tasksRoutes from './routes/tasks';
 import adminRoutes from './routes/admin';
 import chatRoutes from './routes/chat';
 import mcpRoutes from './routes/mcp';
+import etsyRoutes from './routes/etsy';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -166,6 +167,7 @@ app.route('/api/memory', memoryRoutes);
 app.route('/api/settings', settingsRoutes);
 app.route('/api/visual-content', visualContentRoutes);
 app.route('/api/airtable', airtableRoutes);
+app.route('/api/etsy', etsyRoutes);
 app.route('/api/proxy', proxyRoutes);
 app.route('/api/search', searchRoutes);
 app.route('/api/export', exportRoutes);
