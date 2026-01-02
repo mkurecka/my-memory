@@ -13,8 +13,10 @@ import { tasksPage } from '../templates/pages/tasks';
 import { chatPage } from '../templates/pages/chat';
 import { insightsPage } from '../templates/pages/insights';
 import { etsyPage } from '../templates/pages/etsy';
+import { socialPostsPage } from '../templates/pages/social-posts';
 import { AirtableService } from '../services/airtable';
 import { EtsyService } from '../services/etsy';
+import { SocialPostsService } from '../services/social-posts';
 
 const router = new Hono<{ Bindings: Env }>();
 
@@ -373,6 +375,37 @@ router.get('/etsy', async (c) => {
   } catch (error: any) {
     console.error('Etsy page error:', error);
     return c.html(errorPage('Etsy Error', error.message), 500);
+  }
+});
+
+/**
+ * GET /dashboard/social-posts
+ * Social Posts management page - profiles, posts, templates, images from Airtable
+ */
+router.get('/social-posts', async (c) => {
+  try {
+    const apiBase = c.env.APP_URL;
+    const social = new SocialPostsService(c.env);
+
+    // Check if Social Posts Airtable is configured
+    const isConfigured = social.isConfigured();
+
+    // Get summary stats if configured
+    let summary = null;
+    if (isConfigured) {
+      try {
+        summary = await social.getSummary();
+      } catch (err) {
+        console.error('Failed to load Social Posts summary:', err);
+      }
+    }
+
+    const html = socialPostsPage({ apiBase, isConfigured, summary });
+    return c.html(html);
+
+  } catch (error: any) {
+    console.error('Social Posts page error:', error);
+    return c.html(errorPage('Social Posts Error', error.message), 500);
   }
 });
 

@@ -23,6 +23,7 @@ import adminRoutes from './routes/admin';
 import chatRoutes from './routes/chat';
 import mcpRoutes from './routes/mcp';
 import etsyRoutes from './routes/etsy';
+import socialPostsRoutes from './routes/social-posts';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -168,6 +169,7 @@ app.route('/api/settings', settingsRoutes);
 app.route('/api/visual-content', visualContentRoutes);
 app.route('/api/airtable', airtableRoutes);
 app.route('/api/etsy', etsyRoutes);
+app.route('/api/social-posts', socialPostsRoutes);
 app.route('/api/proxy', proxyRoutes);
 app.route('/api/search', searchRoutes);
 app.route('/api/export', exportRoutes);
