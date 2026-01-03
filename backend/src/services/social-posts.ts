@@ -57,6 +57,7 @@ export interface SocialImage {
   url?: string;
   thumbnailUrl?: string;
   postId?: string;
+  postIds?: string[];
   createdAt?: string;
   fields: Record<string, any>;
 }
@@ -520,15 +521,18 @@ export class SocialPostsService {
 
         const images: SocialImage[] = (result.records || []).map((r: any) => {
           const imageFile = r.fields['Image File']?.[0] || r.fields.Image?.[0] || r.fields.Attachment?.[0];
-          const imgUrl = r.fields.ImageUrl || r.fields.URL || r.fields.url || imageFile?.url;
+          const imgUrl = r.fields.imageUrl || r.fields.ImageUrl || r.fields.URL || r.fields.url || imageFile?.url;
           const thumbnailUrl = imageFile?.thumbnails?.large?.url || imageFile?.thumbnails?.small?.url || imgUrl;
+          // Get post IDs - can be single or array from SocialPosts field
+          const postIds = r.fields.SocialPosts || r.fields.Post || [];
 
           return {
             id: r.id,
             name: r.fields.Name || r.fields.name || '',
             url: imgUrl,
             thumbnailUrl,
-            postId: r.fields.Post?.[0] || r.fields.postId,
+            postId: Array.isArray(postIds) ? postIds[0] : postIds,
+            postIds: Array.isArray(postIds) ? postIds : [postIds].filter(Boolean),
             createdAt: r.createdTime,
             fields: r.fields
           };
@@ -553,7 +557,9 @@ export class SocialPostsService {
    */
   async getPostImages(postId: string, useCache = true): Promise<SocialImage[]> {
     const allImages = await this.listImages(useCache);
-    return allImages.filter(img => img.postId === postId);
+    return allImages.filter(img =>
+      img.postIds?.includes(postId) || img.postId === postId
+    );
   }
 
   /**
@@ -574,15 +580,17 @@ export class SocialPostsService {
       const result = await this.airtableFetch(`${SOCIAL_TABLES.images}/${imageId}`);
 
       const imageFile = result.fields['Image File']?.[0] || result.fields.Image?.[0] || result.fields.Attachment?.[0];
-      const url = result.fields.ImageUrl || result.fields.URL || result.fields.url || imageFile?.url;
+      const url = result.fields.imageUrl || result.fields.ImageUrl || result.fields.URL || result.fields.url || imageFile?.url;
       const thumbnailUrl = imageFile?.thumbnails?.large?.url || imageFile?.thumbnails?.small?.url || url;
+      const postIds = result.fields.SocialPosts || result.fields.Post || [];
 
       const image: SocialImage = {
         id: result.id,
         name: result.fields.Name || result.fields.name || '',
         url,
         thumbnailUrl,
-        postId: result.fields.Post?.[0] || result.fields.postId,
+        postId: Array.isArray(postIds) ? postIds[0] : postIds,
+        postIds: Array.isArray(postIds) ? postIds : [postIds].filter(Boolean),
         createdAt: result.createdTime,
         fields: result.fields
       };
@@ -611,15 +619,17 @@ export class SocialPostsService {
       await this.invalidateCache('images', imageId);
 
       const imageFile = result.fields['Image File']?.[0] || result.fields.Image?.[0] || result.fields.Attachment?.[0];
-      const url = result.fields.ImageUrl || result.fields.URL || result.fields.url || imageFile?.url;
+      const url = result.fields.imageUrl || result.fields.ImageUrl || result.fields.URL || result.fields.url || imageFile?.url;
       const thumbnailUrl = imageFile?.thumbnails?.large?.url || imageFile?.thumbnails?.small?.url || url;
+      const postIds = result.fields.SocialPosts || result.fields.Post || [];
 
       return {
         id: result.id,
         name: result.fields.Name || result.fields.name || '',
         url,
         thumbnailUrl,
-        postId: result.fields.Post?.[0] || result.fields.postId,
+        postId: Array.isArray(postIds) ? postIds[0] : postIds,
+        postIds: Array.isArray(postIds) ? postIds : [postIds].filter(Boolean),
         createdAt: result.createdTime,
         fields: result.fields
       };

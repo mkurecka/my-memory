@@ -572,12 +572,39 @@ export function socialPostsPage({ apiBase, isConfigured = true, summary }: Socia
           const data = await response.json();
           if (!data.success) throw new Error(data.error);
           const post = data.data;
+          const postImages = post.postImages || [];
+
+          // Build images gallery HTML
+          const imagesHtml = postImages.length > 0 ? \`
+            <div class="form-group">
+              <label>Related Images (\${postImages.length})</label>
+              <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.75rem; margin-top: 0.5rem;">
+                \${postImages.map(img => \`
+                  <div onclick="closeModal(); setTimeout(() => viewImage('\${img.id}'), 100);"
+                       style="cursor: pointer; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); transition: all 0.2s;">
+                    \${img.thumbnailUrl || img.url ? \`
+                      <img src="\${escapeHtml(img.thumbnailUrl || img.url)}"
+                           style="width: 100%; height: 100px; object-fit: cover;"
+                           onerror="this.parentElement.innerHTML='<div style=\\'height:100px;display:flex;align-items:center;justify-content:center;background:var(--background);color:var(--text-secondary);\\'>No image</div>'">
+                    \` : '<div style="height:100px;display:flex;align-items:center;justify-content:center;background:var(--background);color:var(--text-secondary);">No image</div>'}
+                    <div style="padding: 0.5rem; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                      \${escapeHtml(img.name || 'Untitled')}
+                    </div>
+                  </div>
+                \`).join('')}
+              </div>
+            </div>
+          \` : '';
+
           document.getElementById('modalTitle').textContent = '📝 Post Details';
           document.getElementById('modalContent').innerHTML = \`
+            \${imagesHtml}
             <div class="form-group"><label>Title</label><input type="text" class="form-input" id="edit_title" value="\${escapeHtml(post.title || '')}"></div>
             <div class="form-group"><label>Content</label><textarea class="form-input" id="edit_content">\${escapeHtml(post.content || '')}</textarea></div>
-            <div class="form-group"><label>Status</label><input type="text" class="form-input" id="edit_status" value="\${escapeHtml(post.status || '')}"></div>
-            <div class="form-group"><label>Platform</label><input type="text" class="form-input" id="edit_platform" value="\${escapeHtml(post.platform || '')}"></div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+              <div class="form-group" style="margin-bottom: 0;"><label>Status</label><input type="text" class="form-input" id="edit_status" value="\${escapeHtml(post.status || '')}"></div>
+              <div class="form-group" style="margin-bottom: 0;"><label>Platform</label><input type="text" class="form-input" id="edit_platform" value="\${escapeHtml(post.platform || '')}"></div>
+            </div>
             <div class="flex gap-2 justify-end mt-4">
               <button onclick="closeModal()" class="btn btn-secondary">Cancel</button>
               <button onclick="savePost('\${id}')" class="btn btn-primary">Save</button>
@@ -618,15 +645,60 @@ export function socialPostsPage({ apiBase, isConfigured = true, summary }: Socia
           const data = await response.json();
           if (!data.success) throw new Error(data.error);
           const template = data.data;
-          document.getElementById('modalTitle').textContent = '📋 Template Details';
+          const fields = template.fields || {};
+
+          // Parse variables schema
+          let variablesSchema = {};
+          try {
+            if (fields.variables) variablesSchema = JSON.parse(fields.variables);
+          } catch (e) { console.error('Failed to parse variables:', e); }
+
+          // Render HTML preview with sample values
+          let previewHtml = fields.html || '';
+          Object.keys(variablesSchema).forEach(key => {
+            const placeholder = '{{' + key + '}}';
+            const sampleValue = '<span style="background:#fef3c7;color:#92400e;padding:0 4px;border-radius:3px;">' + key + '</span>';
+            previewHtml = previewHtml.split(placeholder).join(sampleValue);
+          });
+
+          document.getElementById('modalTitle').textContent = '📋 Template Preview';
           document.getElementById('modalContent').innerHTML = \`
-            <div class="form-group"><label>Name</label><input type="text" class="form-input" id="edit_name" value="\${escapeHtml(template.name || '')}"></div>
-            <div class="form-group"><label>Content</label><textarea class="form-input" id="edit_content">\${escapeHtml(template.content || '')}</textarea></div>
-            <div class="form-group"><label>Type</label><input type="text" class="form-input" id="edit_type" value="\${escapeHtml(template.type || '')}"></div>
-            <div class="form-group"><label>Platform</label><input type="text" class="form-input" id="edit_platform" value="\${escapeHtml(template.platform || '')}"></div>
-            <div class="flex gap-2 justify-end mt-4">
-              <button onclick="closeModal()" class="btn btn-secondary">Cancel</button>
-              <button onclick="saveTemplate('\${id}')" class="btn btn-primary">Save</button>
+            <div style="display: grid; gap: 1.5rem;">
+              <div>
+                <div class="flex justify-between" style="align-items: center; margin-bottom: 0.75rem;">
+                  <label style="font-weight: 600;">Preview</label>
+                  <span class="badge badge-ghost">\${fields.width || '?'}×\${fields.height || '?'}px</span>
+                </div>
+                <div style="background: #1a1a2e; padding: 1rem; border-radius: 12px; overflow: auto; max-height: 400px;">
+                  <div style="transform-origin: top left; transform: scale(0.6);">\${previewHtml}</div>
+                </div>
+              </div>
+
+              \${fields.help ? '<div class="form-group"><label>Description</label><p style="color: var(--text-secondary); margin: 0;">' + escapeHtml(fields.help) + '</p></div>' : ''}
+
+              <div class="form-group">
+                <label>Variables Schema</label>
+                <div style="background: var(--background); padding: 1rem; border-radius: 8px; font-family: monospace; font-size: 0.875rem;">
+                  \${Object.keys(variablesSchema).length > 0 ? Object.entries(variablesSchema).map(([key, desc]) =>
+                    '<div style="margin-bottom: 0.5rem;"><strong style="color: var(--primary);">' + escapeHtml(key) + '</strong>: <span style="color: var(--text-secondary);">' + escapeHtml(String(desc)) + '</span></div>'
+                  ).join('') : '<span style="color: var(--text-secondary);">No variables defined</span>'}
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label>HTML Template</label>
+                <textarea class="form-input" id="edit_html" style="font-family: monospace; font-size: 0.8rem; min-height: 150px;">\${escapeHtml(fields.html || '')}</textarea>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group" style="margin-bottom: 0;"><label>Name</label><input type="text" class="form-input" id="edit_name" value="\${escapeHtml(template.name || '')}"></div>
+                <div class="form-group" style="margin-bottom: 0;"><label>Platform</label><input type="text" class="form-input" id="edit_platform" value="\${escapeHtml(fields.platform || '')}"></div>
+              </div>
+
+              <div class="flex gap-2 justify-end">
+                <button onclick="closeModal()" class="btn btn-secondary">Close</button>
+                <button onclick="saveTemplate('\${id}')" class="btn btn-primary">Save Changes</button>
+              </div>
             </div>
           \`;
           document.getElementById('detailModal').style.display = 'flex';
@@ -635,26 +707,153 @@ export function socialPostsPage({ apiBase, isConfigured = true, summary }: Socia
         }
       }
 
+      let currentImageTemplates = [];
+
       async function viewImage(id) {
         try {
-          const response = await fetch(API_BASE + '/api/social-posts/images/' + id);
-          const data = await response.json();
-          if (!data.success) throw new Error(data.error);
-          const image = data.data;
-          const imgUrl = image.url || image.thumbnailUrl;
-          document.getElementById('modalTitle').textContent = '🖼️ Image Details';
+          // Load image and templates in parallel
+          const [imageRes, templatesRes] = await Promise.all([
+            fetch(API_BASE + '/api/social-posts/images/' + id),
+            cachedData.templates ? Promise.resolve({ json: () => ({ success: true, data: cachedData.templates }) }) :
+              fetch(API_BASE + '/api/social-posts/templates')
+          ]);
+
+          const imageData = await imageRes.json();
+          const templatesData = await templatesRes.json();
+
+          if (!imageData.success) throw new Error(imageData.error);
+
+          const image = imageData.data;
+          const fields = image.fields || {};
+          const imgUrl = fields.imageUrl || image.url || image.thumbnailUrl;
+
+          // Cache templates
+          if (templatesData.success) {
+            cachedData.templates = templatesData.data;
+            currentImageTemplates = templatesData.data;
+          }
+
+          // Parse current variables
+          let currentVariables = {};
+          try {
+            if (fields.variables) currentVariables = JSON.parse(fields.variables);
+          } catch (e) { console.error('Failed to parse variables:', e); }
+
+          // Get current template ID
+          const currentTemplateId = Array.isArray(fields.template) ? fields.template[0] : null;
+
+          // Find current template to get its variable schema
+          let variableSchema = {};
+          if (currentTemplateId && currentImageTemplates) {
+            const currentTemplate = currentImageTemplates.find(t => t.id === currentTemplateId);
+            if (currentTemplate && currentTemplate.fields && currentTemplate.fields.variables) {
+              try {
+                variableSchema = JSON.parse(currentTemplate.fields.variables);
+              } catch (e) { console.error('Failed to parse template variables:', e); }
+            }
+          }
+
+          // Build variable input fields
+          const variableFields = Object.keys(variableSchema).length > 0
+            ? Object.entries(variableSchema).map(([key, desc]) => \`
+                <div class="form-group" style="margin-bottom: 0.75rem;">
+                  <label style="font-size: 0.875rem;">\${escapeHtml(key)}</label>
+                  <input type="text" class="form-input variable-input" data-key="\${escapeHtml(key)}"
+                    value="\${escapeHtml(currentVariables[key] || '')}"
+                    placeholder="\${escapeHtml(String(desc))}">
+                </div>
+              \`).join('')
+            : '<p style="color: var(--text-secondary); font-size: 0.875rem;">Select a template to see variables</p>';
+
+          // Build template options
+          const templateOptions = currentImageTemplates.map(t => \`
+            <option value="\${t.id}" \${t.id === currentTemplateId ? 'selected' : ''}>
+              \${escapeHtml(t.name)} \${t.fields?.platform ? '(' + escapeHtml(t.fields.platform) + ')' : ''}
+            </option>
+          \`).join('');
+
+          document.getElementById('modalTitle').textContent = '🖼️ Image Editor';
           document.getElementById('modalContent').innerHTML = \`
-            \${imgUrl ? '<img src="' + escapeHtml(imgUrl) + '" style="width: 100%; max-height: 400px; object-fit: contain; border-radius: 8px; margin-bottom: 1rem;">' : ''}
-            <div class="form-group"><label>Name</label><input type="text" class="form-input" id="edit_name" value="\${escapeHtml(image.name || '')}"></div>
-            <div class="flex gap-2 justify-end mt-4">
-              <button onclick="closeModal()" class="btn btn-secondary">Cancel</button>
-              <button onclick="saveImage('\${id}')" class="btn btn-primary">Save</button>
+            <div style="display: grid; gap: 1.5rem;">
+              \${imgUrl ? \`
+                <div>
+                  <label style="font-weight: 600; display: block; margin-bottom: 0.5rem;">Current Image</label>
+                  <img src="\${escapeHtml(imgUrl)}" style="width: 100%; max-height: 300px; object-fit: contain; border-radius: 8px; background: var(--background);">
+                </div>
+              \` : ''}
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label>Name</label>
+                  <input type="text" class="form-input" id="edit_name" value="\${escapeHtml(image.name || '')}">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label>Status</label>
+                  <select class="form-input" id="edit_status">
+                    <option value="Todo" \${fields.Status === 'Todo' ? 'selected' : ''}>Todo</option>
+                    <option value="In Progress" \${fields.Status === 'In Progress' ? 'selected' : ''}>In Progress</option>
+                    <option value="Done" \${fields.Status === 'Done' ? 'selected' : ''}>Done</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label>Template</label>
+                <select class="form-input" id="edit_template" onchange="onTemplateChange()">
+                  <option value="">-- Select Template --</option>
+                  \${templateOptions}
+                </select>
+              </div>
+
+              <div>
+                <label style="font-weight: 600; display: block; margin-bottom: 0.75rem;">Variables</label>
+                <div id="variableFields" style="background: var(--background); padding: 1rem; border-radius: 8px;">
+                  \${variableFields}
+                </div>
+              </div>
+
+              <div class="flex gap-2 justify-end">
+                <button onclick="closeModal()" class="btn btn-secondary">Cancel</button>
+                <button onclick="saveImage('\${id}')" class="btn btn-primary">Save Changes</button>
+              </div>
             </div>
           \`;
           document.getElementById('detailModal').style.display = 'flex';
         } catch (error) {
           alert('Failed to load image: ' + error.message);
         }
+      }
+
+      function onTemplateChange() {
+        const templateId = document.getElementById('edit_template').value;
+        const container = document.getElementById('variableFields');
+
+        if (!templateId) {
+          container.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.875rem;">Select a template to see variables</p>';
+          return;
+        }
+
+        const template = currentImageTemplates.find(t => t.id === templateId);
+        if (!template || !template.fields || !template.fields.variables) {
+          container.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.875rem;">No variables for this template</p>';
+          return;
+        }
+
+        let variableSchema = {};
+        try {
+          variableSchema = JSON.parse(template.fields.variables);
+        } catch (e) {
+          container.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.875rem;">Invalid variables schema</p>';
+          return;
+        }
+
+        container.innerHTML = Object.entries(variableSchema).map(([key, desc]) => \`
+          <div class="form-group" style="margin-bottom: 0.75rem;">
+            <label style="font-size: 0.875rem;">\${escapeHtml(key)}</label>
+            <input type="text" class="form-input variable-input" data-key="\${escapeHtml(key)}"
+              placeholder="\${escapeHtml(String(desc))}">
+          </div>
+        \`).join('');
       }
 
       async function savePost(id) {
@@ -680,15 +879,34 @@ export function socialPostsPage({ apiBase, isConfigured = true, summary }: Socia
       async function saveTemplate(id) {
         const updates = {
           Name: document.getElementById('edit_name').value,
-          Content: document.getElementById('edit_content').value,
-          Type: document.getElementById('edit_type').value,
-          Platform: document.getElementById('edit_platform').value
+          html: document.getElementById('edit_html').value,
+          platform: document.getElementById('edit_platform').value
         };
         await saveItem('templates', id, updates);
       }
 
       async function saveImage(id) {
-        const updates = { Name: document.getElementById('edit_name').value };
+        // Collect variable values
+        const variableInputs = document.querySelectorAll('.variable-input');
+        const variables = {};
+        variableInputs.forEach(input => {
+          const key = input.getAttribute('data-key');
+          if (key && input.value) variables[key] = input.value;
+        });
+
+        const templateId = document.getElementById('edit_template').value;
+
+        const updates = {
+          Name: document.getElementById('edit_name').value,
+          Status: document.getElementById('edit_status').value,
+          variables: JSON.stringify(variables)
+        };
+
+        // Only update template if selected
+        if (templateId) {
+          updates.template = [templateId];
+        }
+
         await saveItem('images', id, updates);
       }
 
