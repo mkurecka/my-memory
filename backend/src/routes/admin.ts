@@ -948,7 +948,7 @@ router.post('/batch-analyze-posts', async (c) => {
 
 /**
  * POST /api/admin/analyze-all
- * Analyze all unanalyzed memories (for small datasets)
+ * Analyze all unanalyzed memories and posts (for small datasets)
  */
 router.post('/analyze-all', async (c) => {
   if (!checkAdminAuth(c)) {
@@ -960,35 +960,90 @@ router.post('/analyze-all', async (c) => {
 
     let totalAnalyzed = 0;
     let totalErrors = 0;
-    let hasMore = true;
+
+    // Analyze memories
     let offset = 0;
-
+    let hasMore = true;
     while (hasMore) {
-      // Call batch-analyze
-      const res = await fetch(c.req.url.replace('/analyze-all', '/batch-analyze'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Admin-Key': ADMIN_KEY
-        },
-        body: JSON.stringify({ batchSize, offset })
-      });
+      const memories = await c.env.DB.prepare(`
+        SELECT id, text, context_json FROM memory
+        WHERE context_json NOT LIKE '%"analysis":%' OR context_json IS NULL
+        ORDER BY created_at DESC LIMIT ? OFFSET ?
+      `).bind(batchSize, offset).all();
 
-      const data = await res.json() as any;
-      totalAnalyzed += data.analyzed || 0;
-      totalErrors += data.errors || 0;
-      hasMore = data.hasMore;
-      offset = data.nextOffset || offset + batchSize;
+      if (!memories.results || memories.results.length === 0) {
+        hasMore = false;
+        break;
+      }
 
-      // Stop if we hit errors or no progress
-      if (data.analyzed === 0 && data.errors > 0) break;
+      for (const mem of memories.results as any[]) {
+        try {
+          let context: Record<string, any> = {};
+          try { context = mem.context_json ? JSON.parse(mem.context_json) : {}; } catch { /* ignore */ }
+
+          const analysis = await analyzeMemory(c.env, mem.text, context);
+          if (analysis) {
+            context.analysis = analysis;
+            await c.env.DB.prepare('UPDATE memory SET context_json = ? WHERE id = ?')
+              .bind(JSON.stringify(context), mem.id).run();
+            totalAnalyzed++;
+          } else {
+            totalErrors++;
+          }
+          await new Promise(r => setTimeout(r, 300));
+        } catch {
+          totalErrors++;
+        }
+      }
+      offset += batchSize;
+      hasMore = memories.results.length === batchSize;
+    }
+
+    // Analyze posts
+    offset = 0;
+    hasMore = true;
+    while (hasMore) {
+      const posts = await c.env.DB.prepare(`
+        SELECT id, original_text, context_json FROM posts
+        WHERE (context_json NOT LIKE '%"analysis":%' OR context_json IS NULL)
+          AND original_text IS NOT NULL AND original_text != ''
+        ORDER BY created_at DESC LIMIT ? OFFSET ?
+      `).bind(batchSize, offset).all();
+
+      if (!posts.results || posts.results.length === 0) {
+        hasMore = false;
+        break;
+      }
+
+      for (const post of posts.results as any[]) {
+        try {
+          let context: Record<string, any> = {};
+          try { context = post.context_json ? JSON.parse(post.context_json) : {}; } catch { /* ignore */ }
+
+          const analysis = await analyzeMemory(c.env, post.original_text, context);
+          if (analysis) {
+            context.analysis = analysis;
+            await c.env.DB.prepare('UPDATE posts SET context_json = ? WHERE id = ?')
+              .bind(JSON.stringify(context), post.id).run();
+            totalAnalyzed++;
+          } else {
+            totalErrors++;
+          }
+          await new Promise(r => setTimeout(r, 300));
+        } catch {
+          totalErrors++;
+        }
+      }
+      offset += batchSize;
+      hasMore = posts.results.length === batchSize;
     }
 
     return c.json({
       success: true,
       message: 'Full analysis complete',
       totalAnalyzed,
-      totalErrors
+      totalErrors,
+      queued: totalAnalyzed
     });
 
   } catch (error: any) {

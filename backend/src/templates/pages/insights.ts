@@ -1046,21 +1046,58 @@ export function insightsPage({ apiBase, analyzedCount, pendingCount }: InsightsP
           btn.innerHTML = '<span class="loading loading-sm"></span> Analyzing...';
         }
 
-        try {
-          const response = await fetch(API_BASE + '/api/admin/analyze-all', {
-            method: 'POST'
-          });
-          const data = await response.json();
+        let totalAnalyzed = 0;
+        let totalErrors = 0;
 
-          if (!data.success) {
-            throw new Error(data.error || 'Failed to start analysis');
+        try {
+          // Process memories in batches
+          let hasMoreMemories = true;
+          let memoryOffset = 0;
+          while (hasMoreMemories) {
+            if (btn) btn.innerHTML = '<span class="loading loading-sm"></span> Memories: ' + totalAnalyzed;
+            const res = await fetch(API_BASE + '/api/admin/batch-analyze', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Admin-Key': 'migrate-vectors-2025'
+              },
+              body: JSON.stringify({ batchSize: 5, offset: memoryOffset })
+            });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error || 'Failed');
+            totalAnalyzed += data.analyzed || 0;
+            totalErrors += data.errors || 0;
+            hasMoreMemories = data.hasMore;
+            memoryOffset = data.nextOffset || memoryOffset + 5;
           }
 
-          alert('Analysis started for ' + data.queued + ' memories. Refresh in a few minutes.');
-          setTimeout(() => loadInsights(), 5000);
+          // Process posts in batches
+          let hasMorePosts = true;
+          let postOffset = 0;
+          while (hasMorePosts) {
+            if (btn) btn.innerHTML = '<span class="loading loading-sm"></span> Posts: ' + totalAnalyzed;
+            const res = await fetch(API_BASE + '/api/admin/batch-analyze-posts', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Admin-Key': 'migrate-vectors-2025'
+              },
+              body: JSON.stringify({ batchSize: 5, offset: postOffset })
+            });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error || 'Failed');
+            totalAnalyzed += data.analyzed || 0;
+            totalErrors += data.errors || 0;
+            hasMorePosts = data.hasMore;
+            postOffset = data.nextOffset || postOffset + 5;
+          }
+
+          alert('Analysis complete! Analyzed: ' + totalAnalyzed + ', Errors: ' + totalErrors);
+          loadInsights();
         } catch (error) {
           console.error('Error:', error);
-          alert('Failed to start analysis: ' + error.message);
+          alert('Analysis stopped: ' + error.message + '. Analyzed: ' + totalAnalyzed);
+          loadInsights();
         } finally {
           if (btn) {
             btn.disabled = false;
