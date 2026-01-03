@@ -4,6 +4,7 @@ import { generateId } from '../utils/id';
 import { generateEmbedding, extractKeywords, insertVector, EMBEDDING_MODEL } from '../utils/embeddings';
 import { isUrl, detectUrlType, enrichUrlMemory } from '../utils/url';
 import { simpleHash, ensureUserExists } from '../utils/helpers';
+import { analyzeMemory } from '../utils/memory-analyzer';
 
 const router = new Hono<{ Bindings: Env }>();
 
@@ -54,13 +55,21 @@ router.post('/', async (c) => {
         switch (event) {
           case 'onSaveTweet':
             console.log('[Webhook] Calling saveTweetToDatabase...');
-            await saveTweetToDatabase(c, userId, data);
+            const tweetResult = await saveTweetToDatabase(c, userId, data);
             savedType = 'tweet';
+            // Trigger AI analysis in background (non-blocking)
+            c.executionCtx.waitUntil(
+              analyzePostAndUpdate(c.env, tweetResult.postId, tweetResult.text, tweetResult.context)
+            );
             break;
           case 'onSaveYouTubeVideo':
             console.log('[Webhook] Calling saveYouTubeVideoToDatabase...');
-            await saveYouTubeVideoToDatabase(c, userId, data);
+            const videoResult = await saveYouTubeVideoToDatabase(c, userId, data);
             savedType = 'video';
+            // Trigger AI analysis in background (non-blocking)
+            c.executionCtx.waitUntil(
+              analyzePostAndUpdate(c.env, videoResult.postId, videoResult.text, videoResult.context)
+            );
             break;
           case 'saveToMemory':
           case 'onSaveToMemory':
@@ -248,6 +257,20 @@ async function saveTweetToDatabase(c: any, userId: string, data: any) {
 
   console.log('[saveTweetToDatabase] Insert result:', JSON.stringify(result));
   console.log('[Webhook] Saved tweet to posts table:', postId, embedding ? '(with embedding + vectorize)' : '(no embedding)');
+
+  // Return data for background analysis
+  return {
+    postId,
+    text,
+    context: {
+      tweetId: tweetData.tweetId,
+      author: tweetData.author,
+      url: tweetData.url,
+      timestamp: tweetData.timestamp,
+      media: tweetData.media,
+      metadata: tweetData.metadata
+    }
+  };
 }
 
 /**
@@ -305,6 +328,21 @@ async function saveYouTubeVideoToDatabase(c: any, userId: string, data: any) {
   }
 
   console.log('[Webhook] Saved YouTube video to posts table:', postId, embedding ? '(with embedding + vectorize)' : '(no embedding)');
+
+  // Return data for background analysis
+  return {
+    postId,
+    text: combinedText,
+    context: {
+      videoId: videoData.videoId,
+      url: videoData.url,
+      title: videoData.title,
+      channel: videoData.channel,
+      description: videoData.description,
+      transcript: videoData.transcript,
+      metadata: videoData.metadata
+    }
+  };
 }
 
 // URL helpers (isUrl, detectUrlType, extractYouTubeVideoId, enrichUrlMemory) imported from ../utils/url
@@ -420,6 +458,36 @@ async function saveProcessedTextToDatabase(c: any, userId: string, data: any) {
   ).run();
 
   console.log('[Webhook] Saved processed text to posts table:', postId);
+}
+
+/**
+ * Helper: Analyze post and update context_json with analysis results
+ * Runs in background via waitUntil
+ */
+async function analyzePostAndUpdate(
+  env: Env,
+  postId: string,
+  text: string,
+  context: Record<string, any>
+): Promise<void> {
+  try {
+    console.log('[Webhook] Starting background analysis for post:', postId);
+
+    const analysis = await analyzeMemory(env, text, context);
+
+    if (analysis) {
+      const updatedContext = { ...context, analysis };
+      await env.DB
+        .prepare('UPDATE posts SET context_json = ? WHERE id = ?')
+        .bind(JSON.stringify(updatedContext), postId)
+        .run();
+      console.log('[Webhook] Analysis complete for post:', postId, 'category:', analysis.category);
+    } else {
+      console.log('[Webhook] Analysis failed for post:', postId);
+    }
+  } catch (error) {
+    console.error('[Webhook] Background analysis error for post:', postId, error);
+  }
 }
 
 export default router;
