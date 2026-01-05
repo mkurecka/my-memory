@@ -502,6 +502,19 @@ export function etsyPage({ apiBase, isConfigured = true, summary }: EtsyPageProp
       }
 
       async function loadListings(forceRefresh = false) {
+        // Also load products if not cached (for product name display)
+        if (!cachedData.products) {
+          try {
+            const prodResponse = await fetch(API_BASE + '/api/etsy/products');
+            const prodData = await prodResponse.json();
+            if (prodData.success) {
+              cachedData.products = prodData.data;
+            }
+          } catch (e) {
+            console.warn('Failed to load products for listing context:', e);
+          }
+        }
+
         if (cachedData.listings && !forceRefresh) {
           renderListings(cachedData.listings);
           return;
@@ -575,9 +588,17 @@ export function etsyPage({ apiBase, isConfigured = true, summary }: EtsyPageProp
           return;
         }
 
+        // Build product lookup map from cached data
+        const productMap = {};
+        if (cachedData.products) {
+          cachedData.products.forEach(p => { productMap[p.id] = p; });
+        }
+
         container.innerHTML = \`
           <div class="items-grid">
-            \${listings.map(listing => \`
+            \${listings.map(listing => {
+              const product = listing.productId ? productMap[listing.productId] : null;
+              return \`
               <div class="item-card" onclick="viewListing('\${listing.id}')">
                 <div class="item-header">
                   <h3 class="item-title">\${escapeHtml(listing.title || 'Untitled')}</h3>
@@ -587,9 +608,10 @@ export function etsyPage({ apiBase, isConfigured = true, summary }: EtsyPageProp
                 <div class="item-meta">
                   <span class="badge \${getStatusBadge(listing.status)}">\${listing.status || 'Unknown'}</span>
                   \${listing.quantity ? '<span class="badge badge-ghost">Qty: ' + listing.quantity + '</span>' : ''}
+                  \${product ? '<span class="badge badge-primary" onclick="event.stopPropagation(); viewProduct(\\'' + product.id + '\\')">📦 ' + escapeHtml(product.name) + '</span>' : listing.productId ? '<span class="badge badge-ghost">📦 Product linked</span>' : ''}
                 </div>
               </div>
-            \`).join('')}
+            \`}).join('')}
           </div>
         \`;
       }
@@ -730,9 +752,24 @@ export function etsyPage({ apiBase, isConfigured = true, summary }: EtsyPageProp
           if (!data.success) throw new Error(data.error);
 
           const listing = data.data;
+          const relatedProduct = listing.relatedProduct;
+
           document.getElementById('modalTitle').textContent = '🏷️ Listing Details';
           document.getElementById('modalContent').innerHTML = \`
             <div>
+              \${relatedProduct ? \`
+                <div class="form-group">
+                  <label>Related Product</label>
+                  <div class="product-link" style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: var(--primary-light); border-radius: 8px; cursor: pointer;" onclick="closeModal(); viewProduct('\${relatedProduct.id}')">
+                    <div>
+                      <span style="margin-right: 0.5rem;">📦</span>
+                      <strong>\${escapeHtml(relatedProduct.name || 'Untitled')}</strong>
+                      \${relatedProduct.productType ? '<span class="badge badge-ghost" style="margin-left: 0.5rem;">' + escapeHtml(relatedProduct.productType) + '</span>' : ''}
+                    </div>
+                    <span style="color: var(--text-secondary);">View →</span>
+                  </div>
+                </div>
+              \` : '<div class="form-group"><label>Related Product</label><p class="text-secondary" style="padding: 0.75rem; background: var(--background); border-radius: 8px;">No product linked to this listing</p></div>'}
               <div class="form-group">
                 <label>Title</label>
                 <input type="text" class="form-input" id="edit_title" value="\${escapeHtml(listing.title || '')}">
@@ -783,6 +820,7 @@ export function etsyPage({ apiBase, isConfigured = true, summary }: EtsyPageProp
 
           const product = data.data;
           const images = product.productImages || [];
+          const listings = product.productListings || [];
 
           document.getElementById('modalTitle').textContent = '📦 Product Details';
           document.getElementById('modalContent').innerHTML = \`
@@ -819,6 +857,22 @@ export function etsyPage({ apiBase, isConfigured = true, summary }: EtsyPageProp
                 <label>Notes</label>
                 <textarea class="form-input" id="edit_notes">\${escapeHtml(product.notes || '')}</textarea>
               </div>
+              \${listings.length > 0 ? \`
+                <div class="form-group">
+                  <label>Related Listings (\${listings.length})</label>
+                  <div class="listings-list" style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem;">
+                    \${listings.map(listing => \`
+                      <div class="listing-item" style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: var(--background); border-radius: 8px; cursor: pointer;" onclick="closeModal(); viewListing('\${listing.id}')">
+                        <div>
+                          <strong>\${escapeHtml(listing.title || 'Untitled')}</strong>
+                          \${listing.price ? '<span style="color: var(--success); margin-left: 0.5rem;">$' + listing.price + '</span>' : ''}
+                        </div>
+                        <span class="badge \${getStatusBadge(listing.status)}">\${listing.status || 'Unknown'}</span>
+                      </div>
+                    \`).join('')}
+                  </div>
+                </div>
+              \` : '<div class="form-group"><label>Related Listings</label><p class="text-secondary" style="padding: 0.75rem; background: var(--background); border-radius: 8px;">No listings linked to this product</p></div>'}
               \${images.length > 0 ? \`
                 <div class="form-group">
                   <label>Product Images (\${images.length})</label>
@@ -1228,13 +1282,14 @@ export function etsyPage({ apiBase, isConfigured = true, summary }: EtsyPageProp
 
           const images = data.data.productImages || [];
           const imagesWithUrl = images.filter(img => img.url || img.thumbnailUrl);
+          const coverImageUrl = data.data.coverImageUrl;
 
-          if (imagesWithUrl.length === 0) {
+          if (imagesWithUrl.length === 0 && !coverImageUrl) {
             alert('No images to generate PDF for this product');
             return;
           }
 
-          await createPDFFromImages(imagesWithUrl, productName, grayscale);
+          await createPDFFromImages(imagesWithUrl, productName, grayscale, coverImageUrl);
         } catch (error) {
           console.error('Error generating PDF:', error);
           alert('Failed to generate PDF: ' + error.message);
@@ -1296,8 +1351,55 @@ export function etsyPage({ apiBase, isConfigured = true, summary }: EtsyPageProp
         return canvas.toDataURL('image/png');
       }
 
+      // Helper function to add a single image to PDF page
+      async function addImageToPdfPage(pdf, imageUrl, margin, printableWidth, printableHeight, applyGrayscale = false) {
+        const imgResponse = await fetch(imageUrl);
+        if (!imgResponse.ok) throw new Error('HTTP ' + imgResponse.status);
+
+        const blob = await imgResponse.blob();
+        let base64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+
+        const img = new Image();
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+          img.src = base64;
+        });
+
+        // Convert to grayscale if requested
+        if (applyGrayscale) {
+          base64 = convertToGrayscale(img);
+        }
+
+        const imgWidth = img.width;
+        const imgHeight = img.height;
+        const aspectRatio = imgWidth / imgHeight;
+
+        let finalWidth, finalHeight;
+
+        if (aspectRatio > printableWidth / printableHeight) {
+          finalWidth = printableWidth;
+          finalHeight = printableWidth / aspectRatio;
+        } else {
+          finalHeight = printableHeight;
+          finalWidth = printableHeight * aspectRatio;
+        }
+
+        const x = margin + (printableWidth - finalWidth) / 2;
+        const y = margin + (printableHeight - finalHeight) / 2;
+
+        pdf.addImage(base64, 'PNG', x, y, finalWidth, finalHeight);
+        return true;
+      }
+
       // Create PDF with one image per A4 page with safe print margins
-      async function createPDFFromImages(images, filename, grayscale = false) {
+      // If coverImageUrl is provided, it becomes the first page (never grayscaled)
+      async function createPDFFromImages(images, filename, grayscale = false, coverImageUrl = null) {
         const { jsPDF } = window.jspdf;
 
         // A4 dimensions in mm
@@ -1327,7 +1429,31 @@ export function etsyPage({ apiBase, isConfigured = true, summary }: EtsyPageProp
 
         let processed = 0;
         let failed = 0;
+        let pageAdded = false;
+        const totalItems = (coverImageUrl ? 1 : 0) + images.length;
 
+        // Add cover image as first page (never grayscaled)
+        if (coverImageUrl) {
+          if (progressText) {
+            progressText.textContent = 'Adding cover image...';
+          }
+          try {
+            await addImageToPdfPage(pdf, coverImageUrl, margin, printableWidth, printableHeight, false);
+            processed++;
+            pageAdded = true;
+          } catch (err) {
+            console.error('Failed to add cover image to PDF:', coverImageUrl, err);
+            failed++;
+            pdf.setFontSize(12);
+            pdf.text('Cover image failed to load', margin, margin + 10);
+            pageAdded = true;
+          }
+          if (progressBar) {
+            progressBar.style.width = ((processed + failed) / totalItems * 100) + '%';
+          }
+        }
+
+        // Add remaining images
         for (let i = 0; i < images.length; i++) {
           const image = images[i];
           const imageUrl = image.url || image.thumbnailUrl;
@@ -1337,73 +1463,28 @@ export function etsyPage({ apiBase, isConfigured = true, summary }: EtsyPageProp
           }
 
           try {
-            // Fetch image as blob and convert to base64
-            const imgResponse = await fetch(imageUrl);
-            if (!imgResponse.ok) throw new Error('HTTP ' + imgResponse.status);
-
-            const blob = await imgResponse.blob();
-            let base64 = await new Promise((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(reader.result);
-              reader.onerror = reject;
-              reader.readAsDataURL(blob);
-            });
-
-            // Add new page for each image (except first)
-            if (i > 0) {
+            // Add new page for each image (if not first overall page)
+            if (pageAdded) {
               pdf.addPage();
             }
 
-            // Load image to get dimensions and optionally convert to grayscale
-            const img = new Image();
-            await new Promise((resolve, reject) => {
-              img.onload = resolve;
-              img.onerror = reject;
-              img.src = base64;
-            });
-
-            // Convert to grayscale if requested
-            if (grayscale) {
-              base64 = convertToGrayscale(img);
-            }
-
-            const imgWidth = img.width;
-            const imgHeight = img.height;
-            const aspectRatio = imgWidth / imgHeight;
-
-            let finalWidth, finalHeight;
-
-            // Fit image within printable area maintaining aspect ratio
-            if (aspectRatio > printableWidth / printableHeight) {
-              // Image is wider than printable area
-              finalWidth = printableWidth;
-              finalHeight = printableWidth / aspectRatio;
-            } else {
-              // Image is taller than printable area
-              finalHeight = printableHeight;
-              finalWidth = printableHeight * aspectRatio;
-            }
-
-            // Center the image on the page
-            const x = margin + (printableWidth - finalWidth) / 2;
-            const y = margin + (printableHeight - finalHeight) / 2;
-
-            // Add image to PDF
-            pdf.addImage(base64, 'PNG', x, y, finalWidth, finalHeight);
+            await addImageToPdfPage(pdf, imageUrl, margin, printableWidth, printableHeight, grayscale);
             processed++;
+            pageAdded = true;
           } catch (err) {
             console.error('Failed to add image to PDF:', imageUrl, err);
             failed++;
-            // Add a placeholder page for failed images
-            if (i > 0) {
+            if (pageAdded) {
               pdf.addPage();
             }
             pdf.setFontSize(12);
             pdf.text('Image failed to load: ' + (image.name || 'Unknown'), margin, margin + 10);
+            pageAdded = true;
           }
 
           if (progressBar) {
-            const progress = ((i + 1) / images.length) * 100;
+            const coverOffset = coverImageUrl ? 1 : 0;
+            const progress = ((coverOffset + i + 1) / totalItems) * 100;
             progressBar.style.width = progress + '%';
           }
         }
@@ -1417,8 +1498,9 @@ export function etsyPage({ apiBase, isConfigured = true, summary }: EtsyPageProp
         const suffix = grayscale ? '-bw-printable.pdf' : '-printable.pdf';
         pdf.save(safeFilename + suffix);
 
+        const coverInfo = coverImageUrl ? ' (with cover)' : '';
         if (progressText) {
-          progressText.textContent = \`Done! Generated \${grayscale ? 'B&W ' : ''}PDF with \${processed} images\${failed > 0 ? ' (' + failed + ' failed)' : ''}\`;
+          progressText.textContent = \`Done! Generated \${grayscale ? 'B&W ' : ''}PDF with \${processed} images\${coverInfo}\${failed > 0 ? ' (' + failed + ' failed)' : ''}\`;
         }
 
         setTimeout(() => {

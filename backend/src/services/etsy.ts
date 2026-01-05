@@ -28,6 +28,7 @@ export interface EtsyProduct {
   notes?: string;
   generationCost?: number;
   images?: string[];
+  coverImageUrl?: string;
   createdAt?: string;
   fields: Record<string, any>;
 }
@@ -173,22 +174,29 @@ export class EtsyService {
       console.log('[Etsy] Fetching products');
       const result = await this.airtableFetch(ETSY_TABLES.products);
 
-      const products: EtsyProduct[] = (result.records || []).map((r: any) => ({
-        id: r.id,
-        name: r.fields.Name || '',
-        niche: r.fields.Niche,
-        style: r.fields.Style,
-        productType: r.fields['Product Type'],
-        quantity: r.fields.Quantity,
-        status: r.fields.Status,
-        priority: r.fields.Priority,
-        season: r.fields.Season,
-        notes: r.fields.Notes,
-        generationCost: r.fields['Generation Cost'],
-        images: r.fields.Images,
-        createdAt: r.createdTime,
-        fields: r.fields
-      }));
+      const products: EtsyProduct[] = (result.records || []).map((r: any) => {
+        // Extract CoverImage URL from Airtable attachment
+        const coverImage = r.fields.CoverImage?.[0];
+        const coverImageUrl = coverImage?.url || coverImage?.thumbnails?.large?.url;
+
+        return {
+          id: r.id,
+          name: r.fields.Name || '',
+          niche: r.fields.Niche,
+          style: r.fields.Style,
+          productType: r.fields['Product Type'],
+          quantity: r.fields.Quantity,
+          status: r.fields.Status,
+          priority: r.fields.Priority,
+          season: r.fields.Season,
+          notes: r.fields.Notes,
+          generationCost: r.fields['Generation Cost'],
+          images: r.fields.Images,
+          coverImageUrl,
+          createdAt: r.createdTime,
+          fields: r.fields
+        };
+      });
 
       await this.setCache(cacheKey, products);
       console.log(`[Etsy] Fetched ${products.length} products`);
@@ -216,6 +224,10 @@ export class EtsyService {
       console.log(`[Etsy] Fetching product ${productId}`);
       const result = await this.airtableFetch(`${ETSY_TABLES.products}/${productId}`);
 
+      // Extract CoverImage URL from Airtable attachment
+      const coverImage = result.fields.CoverImage?.[0];
+      const coverImageUrl = coverImage?.url || coverImage?.thumbnails?.large?.url;
+
       const product: EtsyProduct = {
         id: result.id,
         name: result.fields.Name || '',
@@ -229,6 +241,7 @@ export class EtsyService {
         notes: result.fields.Notes,
         generationCost: result.fields['Generation Cost'],
         images: result.fields.Images,
+        coverImageUrl,
         createdAt: result.createdTime,
         fields: result.fields
       };
@@ -256,6 +269,10 @@ export class EtsyService {
 
       await this.invalidateCache('products', productId);
 
+      // Extract CoverImage URL from Airtable attachment
+      const coverImage = result.fields.CoverImage?.[0];
+      const coverImageUrl = coverImage?.url || coverImage?.thumbnails?.large?.url;
+
       return {
         id: result.id,
         name: result.fields.Name || '',
@@ -269,6 +286,7 @@ export class EtsyService {
         notes: result.fields.Notes,
         generationCost: result.fields['Generation Cost'],
         images: result.fields.Images,
+        coverImageUrl,
         createdAt: result.createdTime,
         fields: result.fields
       };
@@ -346,6 +364,14 @@ export class EtsyService {
   async getProductImages(productId: string, useCache = true): Promise<EtsyImage[]> {
     const allImages = await this.listImages(useCache);
     return allImages.filter(img => img.productId === productId);
+  }
+
+  /**
+   * Get listings for a specific product
+   */
+  async getProductListings(productId: string, useCache = true): Promise<EtsyListing[]> {
+    const allListings = await this.listListings(useCache);
+    return allListings.filter(listing => listing.productId === productId);
   }
 
   /**

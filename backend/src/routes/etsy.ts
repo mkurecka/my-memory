@@ -72,7 +72,7 @@ app.get('/products', async (c) => {
 
 /**
  * GET /api/etsy/products/:id
- * Get single product with its images
+ * Get single product with its images and listings
  */
 app.get('/products/:id', async (c) => {
   try {
@@ -90,14 +90,18 @@ app.get('/products/:id', async (c) => {
       }, 404);
     }
 
-    // Get images for this product
-    const images = await etsy.getProductImages(productId, !noCache);
+    // Get images and listings for this product in parallel
+    const [images, listings] = await Promise.all([
+      etsy.getProductImages(productId, !noCache),
+      etsy.getProductListings(productId, !noCache)
+    ]);
 
     return c.json<ApiResponse>({
       success: true,
       data: {
         ...product,
-        productImages: images
+        productImages: images,
+        productListings: listings
       }
     });
   } catch (err: any) {
@@ -286,7 +290,7 @@ app.get('/listings', async (c) => {
 
 /**
  * GET /api/etsy/listings/:id
- * Get single listing
+ * Get single listing with related product info
  */
 app.get('/listings/:id', async (c) => {
   try {
@@ -304,9 +308,18 @@ app.get('/listings/:id', async (c) => {
       }, 404);
     }
 
-    return c.json<ApiResponse<EtsyListing>>({
+    // Get related product if productId exists
+    let relatedProduct = null;
+    if (listing.productId) {
+      relatedProduct = await etsy.getProduct(listing.productId, !noCache);
+    }
+
+    return c.json<ApiResponse>({
       success: true,
-      data: listing
+      data: {
+        ...listing,
+        relatedProduct
+      }
     });
   } catch (err: any) {
     console.error('[Etsy Routes] Error fetching listing:', err);
