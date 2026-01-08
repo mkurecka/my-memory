@@ -183,9 +183,10 @@ export async function enrichUrlMemory(
       ...metadata
     };
 
-    // Generate embedding for enriched text
+    // Generate embedding for enriched text (or raw URL as fallback)
     let embedding: number[] | null = null;
-    if (env.AI && combinedText !== url) {
+    if (env.AI) {
+      // Generate embedding even for raw URL if extraction failed
       embedding = await generateEmbedding(env, combinedText);
     }
 

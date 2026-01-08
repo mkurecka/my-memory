@@ -10,6 +10,17 @@ import type { Env } from '../types';
 export const EMBEDDING_MODEL = '@cf/baai/bge-base-en-v1.5';
 export const EMBEDDING_DIMENSIONS = 768;
 
+// Retry configuration
+const DEFAULT_RETRIES = 3;
+const RETRY_DELAY_MS = 100;
+
+/**
+ * Sleep helper for retry delays
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 // Workers AI embedding response type
 interface EmbeddingResponse {
   shape: number[];
@@ -90,50 +101,80 @@ export async function generateEmbeddingsBatch(env: Env, texts: string[]): Promis
 /**
  * Insert or update a vector in Vectorize index
  * Uses upsert to handle duplicates properly
+ * Includes retry logic for transient failures
  */
 export async function insertVector(
   env: Env,
   id: string,
   embedding: number[],
-  metadata: Record<string, string>
+  metadata: Record<string, string>,
+  retries: number = DEFAULT_RETRIES
 ): Promise<boolean> {
-  try {
-    if (!env.VECTORIZE) {
-      console.error('[Embeddings] Vectorize binding not available');
-      return false;
-    }
-
-    // Use upsert to insert or update existing vectors
-    await env.VECTORIZE.upsert([{
-      id,
-      values: embedding,
-      metadata
-    }]);
-
-    console.log('[Embeddings] Upserted vector:', id, 'metadata:', JSON.stringify(metadata));
-    return true;
-  } catch (error) {
-    console.error('[Embeddings] Error upserting vector:', error);
+  if (!env.VECTORIZE) {
+    console.error('[Embeddings] Vectorize binding not available');
     return false;
   }
+
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      // Use upsert to insert or update existing vectors
+      await env.VECTORIZE.upsert([{
+        id,
+        values: embedding,
+        metadata
+      }]);
+
+      console.log('[Embeddings] Upserted vector:', id, 'metadata:', JSON.stringify(metadata));
+      return true;
+    } catch (error) {
+      const isLastAttempt = attempt === retries;
+      console.error(`[Embeddings] Error upserting vector (attempt ${attempt}/${retries}):`, error);
+
+      if (isLastAttempt) {
+        return false;
+      }
+
+      // Exponential backoff: 100ms, 200ms, 400ms...
+      await sleep(RETRY_DELAY_MS * Math.pow(2, attempt - 1));
+    }
+  }
+
+  return false;
 }
 
 /**
  * Delete a vector from Vectorize index
+ * Includes retry logic for transient failures
  */
-export async function deleteVector(env: Env, id: string): Promise<boolean> {
-  try {
-    if (!env.VECTORIZE) {
-      console.error('[Embeddings] Vectorize binding not available');
-      return false;
-    }
-
-    await env.VECTORIZE.deleteByIds([id]);
-    return true;
-  } catch (error) {
-    console.error('[Embeddings] Error deleting vector:', error);
+export async function deleteVector(
+  env: Env,
+  id: string,
+  retries: number = DEFAULT_RETRIES
+): Promise<boolean> {
+  if (!env.VECTORIZE) {
+    console.error('[Embeddings] Vectorize binding not available');
     return false;
   }
+
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      await env.VECTORIZE.deleteByIds([id]);
+      console.log('[Embeddings] Deleted vector:', id);
+      return true;
+    } catch (error) {
+      const isLastAttempt = attempt === retries;
+      console.error(`[Embeddings] Error deleting vector (attempt ${attempt}/${retries}):`, error);
+
+      if (isLastAttempt) {
+        return false;
+      }
+
+      // Exponential backoff: 100ms, 200ms, 400ms...
+      await sleep(RETRY_DELAY_MS * Math.pow(2, attempt - 1));
+    }
+  }
+
+  return false;
 }
 
 /**
