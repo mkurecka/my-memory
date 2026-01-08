@@ -654,6 +654,54 @@ export function unifiedMemoriesPage({ counts, apiBase }: UnifiedMemoriesPageProp
         .item-thumbnail {
           display: none;
         }
+        .item-card {
+          padding: 1rem;
+          flex-direction: column;
+          gap: 0.75rem;
+        }
+        .item-header {
+          flex-wrap: wrap;
+          gap: 0.5rem;
+        }
+        .item-title {
+          font-size: 0.9rem;
+          width: 100%;
+          order: 2;
+        }
+        .item-type-badge {
+          order: 1;
+        }
+        .item-text {
+          font-size: 0.85rem;
+        }
+        .item-meta {
+          gap: 0.5rem;
+          font-size: 0.7rem;
+        }
+        .type-filter {
+          gap: 0.5rem;
+        }
+        .filter-btn {
+          padding: 0.5rem 0.75rem;
+          font-size: 0.8rem;
+        }
+        .filter-count {
+          padding: 0.1rem 0.35rem;
+          font-size: 0.65rem;
+        }
+        .toolbar {
+          flex-direction: column;
+          gap: 0.75rem;
+        }
+        .search-box {
+          min-width: 100%;
+        }
+        .toolbar-actions {
+          width: 100%;
+        }
+        .toolbar-actions select {
+          width: 100%;
+        }
       }
     </style>
   `;

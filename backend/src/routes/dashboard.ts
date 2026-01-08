@@ -8,7 +8,6 @@ import { addContentPage } from '../templates/pages/add-content';
 import { generateCarouselPage } from '../templates/pages/generate-carousel';
 import { claudeSessionsPage } from '../templates/pages/claude-sessions';
 import { settingsPage } from '../templates/pages/settings';
-import { allContentPage } from '../templates/pages/all-content';
 import { tasksPage } from '../templates/pages/tasks';
 import { chatPage } from '../templates/pages/chat';
 import { insightsPage } from '../templates/pages/insights';
@@ -88,39 +87,6 @@ router.get('/memories', async (c) => {
   } catch (error: any) {
     console.error('Memories page error:', error);
     return c.html(errorPage('Memories Error', error.message), 500);
-  }
-});
-
-/**
- * GET /dashboard/all-content
- * Unified content viewer - all saved content in one place
- */
-router.get('/all-content', async (c) => {
-  try {
-    const apiBase = c.env.APP_URL;
-
-    const [memoryCount, tweetsCount, videosCount, aiContentCount] = await Promise.all([
-      c.env.DB.prepare('SELECT COUNT(*) as count FROM memory').first<any>(),
-      c.env.DB.prepare('SELECT COUNT(*) as count FROM posts WHERE type = ?').bind('tweet').first<any>(),
-      c.env.DB.prepare('SELECT COUNT(*) as count FROM posts WHERE type = ?').bind('youtube_video').first<any>(),
-      c.env.DB.prepare('SELECT COUNT(*) as count FROM posts WHERE generated_output IS NOT NULL AND generated_output != ?').bind('').first<any>(),
-    ]);
-
-    const counts = {
-      memories: memoryCount?.count || 0,
-      tweets: tweetsCount?.count || 0,
-      videos: videosCount?.count || 0,
-      aiContent: aiContentCount?.count || 0,
-    };
-
-    const totalCount = counts.memories + counts.tweets + counts.videos + counts.aiContent;
-
-    const html = allContentPage({ totalCount, counts, apiBase });
-    return c.html(html);
-
-  } catch (error: any) {
-    console.error('All Content page error:', error);
-    return c.html(errorPage('All Content Error', error.message), 500);
   }
 });
 
