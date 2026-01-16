@@ -58,6 +58,7 @@ export interface SocialImage {
   thumbnailUrl?: string;
   postId?: string;
   postIds?: string[];
+  sort?: number;
   createdAt?: string;
   fields: Record<string, any>;
 }
@@ -525,6 +526,8 @@ export class SocialPostsService {
           const thumbnailUrl = imageFile?.thumbnails?.large?.url || imageFile?.thumbnails?.small?.url || imgUrl;
           // Get post IDs - can be single or array from SocialPosts field
           const postIds = r.fields.SocialPosts || r.fields.Post || [];
+          // Get sort value from Airtable
+          const sort = r.fields.Sort ?? r.fields.sort ?? null;
 
           return {
             id: r.id,
@@ -533,6 +536,7 @@ export class SocialPostsService {
             thumbnailUrl,
             postId: Array.isArray(postIds) ? postIds[0] : postIds,
             postIds: Array.isArray(postIds) ? postIds : [postIds].filter(Boolean),
+            sort: typeof sort === 'number' ? sort : null,
             createdAt: r.createdTime,
             fields: r.fields
           };
@@ -553,13 +557,20 @@ export class SocialPostsService {
   }
 
   /**
-   * Get images for a specific post
+   * Get images for a specific post, sorted by Sort field
    */
   async getPostImages(postId: string, useCache = true): Promise<SocialImage[]> {
     const allImages = await this.listImages(useCache);
-    return allImages.filter(img =>
+    const postImages = allImages.filter(img =>
       img.postIds?.includes(postId) || img.postId === postId
     );
+    // Sort by Sort field (ascending), null values go to the end
+    return postImages.sort((a, b) => {
+      if (a.sort === null && b.sort === null) return 0;
+      if (a.sort === null) return 1;
+      if (b.sort === null) return -1;
+      return a.sort - b.sort;
+    });
   }
 
   /**
@@ -583,6 +594,7 @@ export class SocialPostsService {
       const url = result.fields.imageUrl || result.fields.ImageUrl || result.fields.URL || result.fields.url || imageFile?.url;
       const thumbnailUrl = imageFile?.thumbnails?.large?.url || imageFile?.thumbnails?.small?.url || url;
       const postIds = result.fields.SocialPosts || result.fields.Post || [];
+      const sort = result.fields.Sort ?? result.fields.sort ?? null;
 
       const image: SocialImage = {
         id: result.id,
@@ -591,6 +603,7 @@ export class SocialPostsService {
         thumbnailUrl,
         postId: Array.isArray(postIds) ? postIds[0] : postIds,
         postIds: Array.isArray(postIds) ? postIds : [postIds].filter(Boolean),
+        sort: typeof sort === 'number' ? sort : null,
         createdAt: result.createdTime,
         fields: result.fields
       };
@@ -622,6 +635,7 @@ export class SocialPostsService {
       const url = result.fields.imageUrl || result.fields.ImageUrl || result.fields.URL || result.fields.url || imageFile?.url;
       const thumbnailUrl = imageFile?.thumbnails?.large?.url || imageFile?.thumbnails?.small?.url || url;
       const postIds = result.fields.SocialPosts || result.fields.Post || [];
+      const sort = result.fields.Sort ?? result.fields.sort ?? null;
 
       return {
         id: result.id,
@@ -630,6 +644,7 @@ export class SocialPostsService {
         thumbnailUrl,
         postId: Array.isArray(postIds) ? postIds[0] : postIds,
         postIds: Array.isArray(postIds) ? postIds : [postIds].filter(Boolean),
+        sort: typeof sort === 'number' ? sort : null,
         createdAt: result.createdTime,
         fields: result.fields
       };

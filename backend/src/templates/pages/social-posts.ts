@@ -112,6 +112,20 @@ export function socialPostsPage({ apiBase, isConfigured = true, summary }: Socia
       </div>
     </div>
 
+    <!-- Image Lightbox -->
+    <div id="lightbox" class="lightbox-overlay" style="display: none;" onclick="closeLightbox(event)">
+      <button class="lightbox-close" onclick="closeLightbox()">&times;</button>
+      <button class="lightbox-nav lightbox-prev" onclick="lightboxPrev(event)">&larr;</button>
+      <button class="lightbox-nav lightbox-next" onclick="lightboxNext(event)">&rarr;</button>
+      <div class="lightbox-content" onclick="event.stopPropagation()">
+        <img id="lightboxImage" src="" alt="">
+        <div class="lightbox-caption">
+          <span id="lightboxTitle"></span>
+          <span id="lightboxCounter"></span>
+        </div>
+      </div>
+    </div>
+
     <style>
       .stats-grid {
         display: grid;
@@ -362,6 +376,103 @@ export function socialPostsPage({ apiBase, isConfigured = true, summary }: Socia
         border-radius: 12px;
       }
       .empty-state-icon { font-size: 3rem; margin-bottom: 1rem; }
+
+      /* Lightbox Styles */
+      .lightbox-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.95);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 2000;
+      }
+      .lightbox-content {
+        max-width: 90vw;
+        max-height: 90vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .lightbox-content img {
+        max-width: 100%;
+        max-height: 80vh;
+        object-fit: contain;
+        border-radius: 8px;
+      }
+      .lightbox-caption {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+        padding: 1rem;
+        color: white;
+        font-size: 0.9375rem;
+      }
+      #lightboxTitle {
+        font-weight: 600;
+      }
+      #lightboxCounter {
+        color: rgba(255, 255, 255, 0.7);
+      }
+      .lightbox-close {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        background: rgba(255, 255, 255, 0.1);
+        border: none;
+        color: white;
+        font-size: 2rem;
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .lightbox-close:hover {
+        background: rgba(255, 255, 255, 0.2);
+      }
+      .lightbox-nav {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        background: rgba(255, 255, 255, 0.1);
+        border: none;
+        color: white;
+        font-size: 1.5rem;
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .lightbox-nav:hover {
+        background: rgba(255, 255, 255, 0.2);
+      }
+      .lightbox-nav:disabled {
+        opacity: 0.3;
+        cursor: default;
+      }
+      .lightbox-prev { left: 1rem; }
+      .lightbox-next { right: 1rem; }
+
+      .image-gallery-item {
+        cursor: pointer;
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        transition: all 0.2s;
+      }
+      .image-gallery-item:hover {
+        border-color: var(--primary);
+        transform: scale(1.02);
+      }
     </style>
 
     <script>
@@ -369,6 +480,10 @@ export function socialPostsPage({ apiBase, isConfigured = true, summary }: Socia
       let currentTab = 'posts';
       let cachedData = { posts: null, profiles: null, templates: null, images: null };
       let currentStatusFilter = 'all';
+
+      // Lightbox state
+      let lightboxImages = [];
+      let lightboxIndex = 0;
 
       async function loadSummary() {
         try {
@@ -574,21 +689,30 @@ export function socialPostsPage({ apiBase, isConfigured = true, summary }: Socia
           const post = data.data;
           const postImages = post.postImages || [];
 
-          // Build images gallery HTML
+          // Store images for lightbox (already sorted by backend)
+          lightboxImages = postImages.map(img => ({
+            id: img.id,
+            url: img.url || img.thumbnailUrl,
+            name: img.name || 'Untitled',
+            sort: img.sort
+          })).filter(img => img.url);
+
+          // Build images gallery HTML with lightbox click
           const imagesHtml = postImages.length > 0 ? \`
             <div class="form-group">
               <label>Related Images (\${postImages.length})</label>
               <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.75rem; margin-top: 0.5rem;">
-                \${postImages.map(img => \`
-                  <div onclick="closeModal(); setTimeout(() => viewImage('\${img.id}'), 100);"
-                       style="cursor: pointer; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); transition: all 0.2s;">
+                \${postImages.map((img, index) => \`
+                  <div class="image-gallery-item"
+                       onclick="openLightbox(\${index})"
+                       title="Click to view full size">
                     \${img.thumbnailUrl || img.url ? \`
                       <img src="\${escapeHtml(img.thumbnailUrl || img.url)}"
                            style="width: 100%; height: 100px; object-fit: cover;"
                            onerror="this.parentElement.innerHTML='<div style=\\'height:100px;display:flex;align-items:center;justify-content:center;background:var(--background);color:var(--text-secondary);\\'>No image</div>'">
                     \` : '<div style="height:100px;display:flex;align-items:center;justify-content:center;background:var(--background);color:var(--text-secondary);">No image</div>'}
                     <div style="padding: 0.5rem; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                      \${escapeHtml(img.name || 'Untitled')}
+                      \${img.sort != null ? '<span style="color:var(--primary);margin-right:4px;">#' + img.sort + '</span>' : ''}\${escapeHtml(img.name || 'Untitled')}
                     </div>
                   </div>
                 \`).join('')}
@@ -967,6 +1091,56 @@ export function socialPostsPage({ apiBase, isConfigured = true, summary }: Socia
         div.textContent = text;
         return div.innerHTML;
       }
+
+      // Lightbox functions
+      function openLightbox(index) {
+        if (lightboxImages.length === 0) return;
+        lightboxIndex = index;
+        updateLightbox();
+        document.getElementById('lightbox').style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+      }
+
+      function closeLightbox(event) {
+        if (event && event.target !== event.currentTarget) return;
+        document.getElementById('lightbox').style.display = 'none';
+        document.body.style.overflow = '';
+      }
+
+      function updateLightbox() {
+        const img = lightboxImages[lightboxIndex];
+        if (!img) return;
+        document.getElementById('lightboxImage').src = img.url;
+        document.getElementById('lightboxTitle').textContent = img.name;
+        document.getElementById('lightboxCounter').textContent = (lightboxIndex + 1) + ' / ' + lightboxImages.length;
+        document.querySelector('.lightbox-prev').disabled = lightboxIndex === 0;
+        document.querySelector('.lightbox-next').disabled = lightboxIndex === lightboxImages.length - 1;
+      }
+
+      function lightboxPrev(event) {
+        event.stopPropagation();
+        if (lightboxIndex > 0) {
+          lightboxIndex--;
+          updateLightbox();
+        }
+      }
+
+      function lightboxNext(event) {
+        event.stopPropagation();
+        if (lightboxIndex < lightboxImages.length - 1) {
+          lightboxIndex++;
+          updateLightbox();
+        }
+      }
+
+      // Keyboard navigation for lightbox
+      document.addEventListener('keydown', function(e) {
+        const lightbox = document.getElementById('lightbox');
+        if (lightbox.style.display !== 'flex') return;
+        if (e.key === 'Escape') closeLightbox();
+        if (e.key === 'ArrowLeft') lightboxPrev({ stopPropagation: () => {} });
+        if (e.key === 'ArrowRight') lightboxNext({ stopPropagation: () => {} });
+      });
 
       // Initialize
       loadSummary();
