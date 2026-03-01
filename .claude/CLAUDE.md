@@ -18,14 +18,17 @@ my-memory/
 ├── backend/              # Cloudflare Workers backend
 │   ├── src/
 │   │   ├── index.ts                 # Main Hono app, CORS, routes
-│   │   ├── routes/                  # API route handlers (18 files)
+│   │   ├── routes/                  # API route handlers (21 files)
 │   │   │   ├── admin.ts             # Admin & migration endpoints
 │   │   │   ├── airtable.ts          # Airtable integration
 │   │   │   ├── auth.ts              # JWT authentication
 │   │   │   ├── chat.ts              # Chat/RAG with memories
 │   │   │   ├── claude-sessions.ts   # Claude Code session tracking
 │   │   │   ├── dashboard.ts         # Dashboard page routing
+│   │   │   ├── etsy.ts              # Etsy integration
 │   │   │   ├── export.ts            # Data export endpoints
+│   │   │   ├── mcp.ts               # MCP JSON-RPC endpoint
+│   │   │   ├── mcp-sessions.ts      # Work session MCP tool handlers
 │   │   │   ├── memory.ts            # Memory storage endpoints
 │   │   │   ├── mobile.ts            # Mobile-optimized endpoints
 │   │   │   ├── posts.ts             # Posts management
@@ -33,10 +36,11 @@ my-memory/
 │   │   │   ├── proxy.ts             # External API proxy
 │   │   │   ├── search.ts            # Semantic & keyword search
 │   │   │   ├── settings.ts          # User settings
+│   │   │   ├── social-posts.ts      # Social media posts
 │   │   │   ├── tasks.ts             # Task management
-│   │   │   ├── ui.ts                # UI components
 │   │   │   ├── visual-content.ts    # Visual content generation
-│   │   │   └── webhook.ts           # Webhook handling
+│   │   │   ├── webhook.ts           # Webhook handling
+│   │   │   └── work-sessions.ts     # Work sessions REST API
 │   │   ├── templates/
 │   │   │   ├── layout.ts            # Base HTML layout
 │   │   │   └── pages/               # Dashboard pages (17 files)
@@ -106,15 +110,16 @@ my-memory/
 ### Database Tables
 
 ```sql
-users           # User accounts, auth
-posts           # Processed texts, drafts, saved content
-memory          # Saved memories with tags & embeddings
-sessions        # User sessions
-settings        # User preferences
-webhook_events  # Received webhook data
-tasks           # Task management
+users              # User accounts, auth
+posts              # Processed texts, drafts, saved content
+memory             # Saved memories with tags & embeddings
+sessions           # User sessions
+settings           # User preferences
+webhook_events     # Received webhook data
+tasks              # Task management
 task_conversations # Task conversation threads
-chat_history    # Chat with memories history
+chat_history       # Chat with memories history
+work_sessions      # Claude Code work session summaries (semantic search via Vectorize)
 ```
 
 ### API Endpoints
@@ -153,6 +158,13 @@ chat_history    # Chat with memories history
 **Webhook** (`/api/v1/webhook`)
 - `POST /` - Receive external events (tweets, videos, urls)
 
+**Work Sessions** (`/api/work-sessions/`)
+- `POST /` - Save a work session (auto-generates embeddings)
+- `GET /` - List sessions (`?project=`, `?limit=`, `?offset=`)
+- `GET /projects` - List projects with session counts
+- `GET /:id` - Get a specific session
+- `POST /search` - Semantic search sessions
+
 **Admin** (`/api/admin/`)
 - `POST /migrate-vectors` - Migrate embeddings to Vectorize
 
@@ -168,6 +180,8 @@ The backend includes an MCP server for Claude Desktop/Code integration.
 
 #### Available Tools
 
+**Memory Tools:**
+
 | Tool | Description |
 |------|-------------|
 | `search_memory` | Semantic search through saved memories |
@@ -175,6 +189,15 @@ The backend includes an MCP server for Claude Desktop/Code integration.
 | `list_memories` | List recent memories with optional filters |
 | `get_memory` | Get specific memory by ID |
 | `delete_memory` | Delete a memory by ID |
+
+**Work Session Tools** (no auth required — global/system-level):
+
+| Tool | Description |
+|------|-------------|
+| `save_session` | Save a work session (goal, summary, changes, errors, tags) |
+| `search_sessions` | Semantic search across sessions (Vectorize + LIKE fallback) |
+| `get_session` | Retrieve a specific session by ID |
+| `list_projects` | List all projects with session counts |
 
 #### Authentication
 
@@ -326,5 +349,5 @@ npm run lint    # ESLint only
 
 ---
 
-**Last Updated**: 2025-12-31
+**Last Updated**: 2026-03-01
 **Status**: ✅ Production Ready
