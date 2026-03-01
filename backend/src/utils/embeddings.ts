@@ -188,7 +188,7 @@ export async function vectorSearch(
   options: {
     topK?: number;
     minScore?: number;
-    table?: 'posts' | 'memory';
+    table?: 'posts' | 'memory' | 'work_sessions';
   } = {}
 ): Promise<VectorizeMatch[]> {
   try {

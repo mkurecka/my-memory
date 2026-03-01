@@ -24,6 +24,7 @@ import chatRoutes from './routes/chat';
 import mcpRoutes from './routes/mcp';
 import etsyRoutes from './routes/etsy';
 import socialPostsRoutes from './routes/social-posts';
+import workSessionsRoutes from './routes/work-sessions';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -190,6 +191,9 @@ app.route('/api/admin', adminRoutes);
 
 // Chat routes (RAG-powered conversations)
 app.route('/api/chat', chatRoutes);
+
+// Work sessions API (REST access to session storage)
+app.route('/api/work-sessions', workSessionsRoutes);
 
 // MCP routes (Model Context Protocol for Claude Desktop/Code)
 app.route('/mcp', mcpRoutes);

@@ -15,6 +15,7 @@ import type { Env } from '../types';
 import { verifyJWT } from '../utils/jwt';
 import { generateEmbedding, vectorSearch } from '../utils/embeddings';
 import { generateId } from '../utils/id';
+import { saveWorkSession, searchWorkSessions, getWorkSession, listWorkProjects } from './mcp-sessions';
 
 const mcp = new Hono<{ Bindings: Env }>();
 
@@ -134,14 +135,23 @@ async function handleMcpRequest(
     case 'tools/list':
       return handleListTools();
 
-    case 'tools/call':
-      // Tool calls require authentication
+    case 'tools/call': {
+      // Session tools are global (no user scoping needed)
+      const sessionTools = ['save_session', 'search_sessions', 'get_session', 'list_projects'];
+      const toolName = params?.name;
+
+      if (sessionTools.includes(toolName)) {
+        return handleToolCall(env, userId || '__system__', params);
+      }
+
+      // Other tool calls require authentication
       if (!userId) {
         const error = new Error('Authentication required. Provide API key via Authorization header.');
         (error as any).code = -32001;
         throw error;
       }
       return handleToolCall(env, userId, params);
+    }
 
     case 'resources/list':
       if (!userId) {
@@ -280,6 +290,57 @@ function handleListTools() {
           },
           required: ['id']
         }
+      },
+      {
+        name: 'save_session',
+        description: 'Save a completed work session with goal, summary, changes, errors, and open items',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            project: { type: 'string', description: 'Project name/directory' },
+            jira_ref: { type: 'string', description: 'Optional Jira/Linear issue reference' },
+            goal: { type: 'string', description: 'Session goal' },
+            summary: { type: 'string', description: 'Summary of what was accomplished' },
+            changes: { type: 'array', items: { type: 'string' }, description: 'List of files changed' },
+            errors: { type: 'array', items: { type: 'string' }, description: 'Errors encountered' },
+            open_items: { type: 'array', items: { type: 'string' }, description: 'Open questions or unfinished items' },
+            tags: { type: 'array', items: { type: 'string' }, description: 'Tags for categorization' },
+            verified: { type: 'boolean', description: 'Whether the work was verified/tested' },
+          },
+          required: ['project', 'goal'],
+        },
+      },
+      {
+        name: 'search_sessions',
+        description: 'Search across all work sessions using semantic search',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: 'Search query' },
+            project: { type: 'string', description: 'Optional: filter by project' },
+            limit: { type: 'number', description: 'Max results (default 10)' },
+          },
+          required: ['query'],
+        },
+      },
+      {
+        name: 'get_session',
+        description: 'Retrieve a specific work session by ID',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', description: 'Session ID' },
+          },
+          required: ['id'],
+        },
+      },
+      {
+        name: 'list_projects',
+        description: 'List all projects with session counts',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
       }
     ]
   };
@@ -306,6 +367,18 @@ async function handleToolCall(env: Env, userId: string, params: any): Promise<an
 
     case 'delete_memory':
       return deleteMemory(env, userId, args);
+
+    case 'save_session':
+      return saveWorkSession(env, args);
+
+    case 'search_sessions':
+      return searchWorkSessions(env, args);
+
+    case 'get_session':
+      return getWorkSession(env, args);
+
+    case 'list_projects':
+      return listWorkProjects(env);
 
     default:
       throw new Error(`Unknown tool: ${name}`);
