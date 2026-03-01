@@ -7,6 +7,7 @@ import { aiImagesPage } from '../templates/pages/ai-images';
 import { addContentPage } from '../templates/pages/add-content';
 import { generateCarouselPage } from '../templates/pages/generate-carousel';
 import { claudeSessionsPage } from '../templates/pages/claude-sessions';
+import { workSessionsPage } from '../templates/pages/work-sessions';
 import { settingsPage } from '../templates/pages/settings';
 import { tasksPage } from '../templates/pages/tasks';
 import { chatPage } from '../templates/pages/chat';
@@ -181,6 +182,25 @@ router.get('/claude-sessions', async (c) => {
   } catch (error: any) {
     console.error('Claude Sessions page error:', error);
     return c.html(errorPage('Claude Sessions Error', error.message), 500);
+  }
+});
+
+/**
+ * GET /dashboard/work-sessions
+ * Work sessions page - coding session history and progress
+ */
+router.get('/work-sessions', async (c) => {
+  try {
+    const apiBase = c.env.APP_URL;
+    const result = await c.env.DB.prepare('SELECT COUNT(*) as count FROM work_sessions').first<any>();
+    const count = result?.count || 0;
+
+    const html = workSessionsPage({ count, apiBase });
+    return c.html(html);
+
+  } catch (error: any) {
+    console.error('Work Sessions page error:', error);
+    return c.html(errorPage('Work Sessions Error', error.message), 500);
   }
 });
 

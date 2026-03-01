@@ -32,6 +32,7 @@ export function nav({ currentPage, apiBase }: NavProps): string {
       links: [
         { path: '/dashboard/chat', label: 'Chat', icon: '💬' },
         { path: '/dashboard/tasks', label: 'Tasks', icon: '📋' },
+        { path: '/dashboard/work-sessions', label: 'Sessions', icon: '📝' },
         { path: '/dashboard/etsy', label: 'Etsy', icon: '🏪' },
         { path: '/dashboard/social-posts', label: 'Social', icon: '📣' },
         { path: '/dashboard/settings', label: 'Settings', icon: '⚙️' },

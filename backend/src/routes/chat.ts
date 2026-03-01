@@ -12,6 +12,7 @@ interface ChatRequest {
   model?: string;  // Workers AI model: llama-3.1-8b-instruct (default), llama-3.2-3b-instruct (faster)
   includeMemories?: boolean;
   includePosts?: boolean;
+  includeWorkSessions?: boolean;
   topK?: number;
   minSimilarity?: number;
   useOpenRouter?: boolean;  // Set true to use OpenRouter instead of Workers AI
@@ -40,6 +41,7 @@ router.post('/', async (c) => {
       model = '@cf/meta/llama-3.1-8b-instruct',  // Workers AI model (FREE)
       includeMemories = true,
       includePosts = true,
+      includeWorkSessions = true,
       topK = 5,
       minSimilarity = 0.5,  // Lowered default for better recall
       useOpenRouter = false
@@ -143,6 +145,41 @@ router.post('/', async (c) => {
           }
         }
       }
+
+      // Search work sessions
+      if (includeWorkSessions) {
+        console.log('[Chat] Searching work_sessions with minScore:', minSimilarity);
+        const sessionResults = await vectorSearch(c.env, queryEmbedding, null, {
+          topK,
+          minScore: minSimilarity,
+          table: 'work_sessions'
+        });
+        console.log('[Chat] Work sessions results count:', sessionResults.length);
+
+        if (sessionResults.length > 0) {
+          const sessionIds = sessionResults.map(r => r.id);
+          const placeholders = sessionIds.map(() => '?').join(',');
+          const sessionData = await c.env.DB.prepare(
+            `SELECT id, project, goal, summary, jira_ref, created_at FROM work_sessions WHERE id IN (${placeholders})`
+          ).bind(...sessionIds).all();
+
+          const sessionMap = new Map((sessionData.results || []).map((r: any) => [r.id, r]));
+          for (const vr of sessionResults) {
+            const session = sessionMap.get(vr.id) as any;
+            if (session) {
+              const text = `[${session.project}] ${session.goal}${session.summary ? ': ' + session.summary : ''}`;
+              sources.push({
+                id: session.id,
+                type: 'session',
+                text,
+                similarity: vr.score,
+                created_at: session.created_at,
+                url: '/dashboard/work-sessions'
+              });
+            }
+          }
+        }
+      }
     }
 
     // Sort sources by similarity and take top results
@@ -162,6 +199,7 @@ router.post('/', async (c) => {
 
     // Build the RAG prompt
     const systemPrompt = `You are a helpful AI assistant with access to the user's personal knowledge base.
+You also have access to work session logs that track coding progress, changes, errors, and open items across projects.
 Use the provided context to answer questions accurately and helpfully.
 When referencing information from the context, cite the source number in brackets like [1], [2], etc.
 If the context doesn't contain relevant information, say so and provide a general response.
