@@ -825,7 +825,7 @@ export function unifiedMemoriesPage({ counts, apiBase }: UnifiedMemoriesPageProp
           const author = context.author || {};
           title = author.displayName || author.name || 'Unknown';
           subtitle = author.username ? '@' + author.username : '';
-          text = item.original_text || '';
+          text = item.original_text || item.generated_output || '';
           const images = context.media?.images || [];
           thumbnail = images[0] || '';
           link = context.url || '';
@@ -1060,7 +1060,7 @@ export function unifiedMemoriesPage({ counts, apiBase }: UnifiedMemoriesPageProp
         const stats = context.stats || context.statistics || {};
         const postedAt = context.postedAt || context.timestamp ? new Date(context.postedAt || context.timestamp).toLocaleString() : '';
         const savedAt = new Date(item.created_at).toLocaleDateString();
-        const text = item.original_text || context.text || '';
+        const text = item.original_text || item.generated_output || context.text || '';
 
         container.innerHTML = \`
           <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.25rem;">
