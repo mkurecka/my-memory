@@ -546,7 +546,7 @@ export function tweetsPage({ count, apiBase }: TweetsPageProps): string {
                     </div>
                     <button class="delete-btn" onclick="event.stopPropagation(); deletePost('\${item.id}', this)" title="Delete">🗑️</button>
                   </div>
-                  <div class="tweet-text">\${escapeHtml(item.original_text || '')}</div>
+                  <div class="tweet-text">\${escapeHtml(item.original_text || item.generated_output || '') || '<em>No text captured</em>'}</div>
                   \${images.length > 0 ? \`
                     <div class="tweet-media">
                       \${images.slice(0, 4).map(img => \`<img src="\${img}" alt="Tweet media" loading="lazy" />\`).join('')}
@@ -676,7 +676,7 @@ export function tweetsPage({ count, apiBase }: TweetsPageProps): string {
         const stats = context.stats || context.statistics || {};
         const postedAt = context.postedAt || context.timestamp ? new Date(context.postedAt || context.timestamp).toLocaleString() : '';
         const savedAt = new Date(item.created_at).toLocaleDateString();
-        const text = item.original_text || context.text || '';
+        const text = item.original_text || item.generated_output || context.text || '';
 
         modalBody.innerHTML = \`
           <div class="detail-author">

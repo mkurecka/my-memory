@@ -1827,6 +1827,11 @@ function extractTweetData(tweetElement) {
     const quoteTweetElement = tweetElement.querySelector('[data-testid="card.layoutLarge.media"]');
     const isQuoteTweet = !!quoteTweetElement;
 
+    // Detect Twitter articles (long-form posts / Notes)
+    const isArticle = tweetText.length > 500 ||
+      !!tweetElement.querySelector('[data-testid="TextBlock"]') ||
+      !!document.querySelector('article [role="article"]');
+
     return {
       tweetId,
       text: tweetText,
@@ -1845,6 +1850,7 @@ function extractTweetData(tweetElement) {
       metadata: {
         isRetweet,
         isQuoteTweet,
+        isArticle,
         pageTitle: document.title,
         capturedAt: new Date().toISOString()
       }

@@ -400,29 +400,56 @@ async function searchMemory(env: Env, userId: string, args: any) {
     };
   }
 
-  // Search using Vectorize
-  const vectorResults = await vectorSearch(env, queryEmbedding, userId, {
-    topK: limit,
-    minScore: 0.5,
-    table: 'memory'
-  });
+  // Search both memory and posts tables via Vectorize
+  const [memoryResults, postsResults] = await Promise.all([
+    vectorSearch(env, queryEmbedding, userId, { topK: limit, minScore: 0.5, table: 'memory' }),
+    vectorSearch(env, queryEmbedding, userId, { topK: limit, minScore: 0.5, table: 'posts' })
+  ]);
 
-  if (vectorResults.length === 0) {
+  const allVectorResults = [...memoryResults, ...postsResults]
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+
+  if (allVectorResults.length === 0) {
     return {
       content: [{ type: 'text', text: 'No matching memories found.' }]
     };
   }
 
-  // Fetch full records
-  const ids = vectorResults.map(r => r.id);
-  const placeholders = ids.map(() => '?').join(',');
-  const dbResults = await env.DB.prepare(
-    `SELECT id, text, context_json, tag, created_at FROM memory WHERE id IN (${placeholders})`
-  ).bind(...ids).all();
+  // Separate IDs by table
+  const memoryIds = allVectorResults.filter(r => memoryResults.some(m => m.id === r.id)).map(r => r.id);
+  const postIds = allVectorResults.filter(r => postsResults.some(p => p.id === r.id)).map(r => r.id);
+
+  // Fetch full records from both tables
+  const allRecords: any[] = [];
+
+  if (memoryIds.length > 0) {
+    const placeholders = memoryIds.map(() => '?').join(',');
+    const dbResults = await env.DB.prepare(
+      `SELECT id, text, context_json, tag, created_at FROM memory WHERE id IN (${placeholders})`
+    ).bind(...memoryIds).all();
+    allRecords.push(...(dbResults.results || []).map((r: any) => ({ ...r, _source: 'memory' })));
+  }
+
+  if (postIds.length > 0) {
+    const placeholders = postIds.map(() => '?').join(',');
+    const dbResults = await env.DB.prepare(
+      `SELECT id, original_text, generated_output, context_json, type, created_at FROM posts WHERE id IN (${placeholders})`
+    ).bind(...postIds).all();
+    allRecords.push(...(dbResults.results || []).map((r: any) => ({
+      id: r.id,
+      text: r.original_text || r.generated_output || '',
+      context_json: r.context_json,
+      tag: r.type,
+      created_at: r.created_at,
+      generated_output: r.generated_output,
+      _source: 'posts'
+    })));
+  }
 
   // Merge with scores
-  const resultsMap = new Map((dbResults.results || []).map((r: any) => [r.id, r]));
-  let results = vectorResults.map(vr => ({
+  const resultsMap = new Map(allRecords.map((r: any) => [r.id, r]));
+  let results = allVectorResults.map(vr => ({
     ...resultsMap.get(vr.id),
     similarity: vr.score
   })).filter(r => r.id);
@@ -435,13 +462,15 @@ async function searchMemory(env: Env, userId: string, args: any) {
   // Format results
   const formatted = results.map((r: any, i: number) => {
     const context = r.context_json ? JSON.parse(r.context_json) : {};
-    const title = context.title || context.extractedTitle || '';
+    const title = context.title || context.extractedTitle || context.pageTitle || '';
     const similarity = r.similarity ? ` (${(r.similarity * 100).toFixed(1)}% match)` : '';
+    const source = r._source === 'posts' ? ` [${r.tag || 'post'}]` : '';
+    const content = r.generated_output || r.text || '';
 
-    let output = `${i + 1}. [${r.id}]${similarity}`;
+    let output = `${i + 1}. [${r.id}]${similarity}${source}`;
     if (title) output += `\n   Title: ${title}`;
-    output += `\n   Content: ${r.text.substring(0, 200)}${r.text.length > 200 ? '...' : ''}`;
-    if (r.tag) output += `\n   Tag: ${r.tag}`;
+    output += `\n   Content: ${content.substring(0, 200)}${content.length > 200 ? '...' : ''}`;
+    if (r.tag && r._source === 'memory') output += `\n   Tag: ${r.tag}`;
     output += `\n   Created: ${new Date(r.created_at).toLocaleString()}`;
     return output;
   });

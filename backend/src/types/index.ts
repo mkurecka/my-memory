@@ -23,6 +23,8 @@ export interface Env {
   // Service bindings
   HTML_TO_IMAGE_SERVICE?: Fetcher;
   TRANSCRIPT_SERVICE?: Fetcher;
+  // External APIs
+  DUMPLING_API_KEY?: string;
   // AI and Vector bindings
   AI?: Ai;
   VECTORIZE?: VectorizeIndex;

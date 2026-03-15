@@ -5,6 +5,7 @@ import { generateEmbedding, extractKeywords, insertVector, EMBEDDING_MODEL } fro
 import { isUrl, detectUrlType, enrichUrlMemory } from '../utils/url';
 import { simpleHash, ensureUserExists } from '../utils/helpers';
 import { analyzeMemory } from '../utils/memory-analyzer';
+import { scrapeArticleContent } from '../utils/article-scraper';
 
 const router = new Hono<{ Bindings: Env }>();
 
@@ -61,6 +62,19 @@ router.post('/', async (c) => {
             c.executionCtx.waitUntil(
               analyzePostAndUpdate(c.env, tweetResult.postId, tweetResult.text, tweetResult.context)
             );
+            // Trigger article content scraping if this is an article
+            // Detect via: extension flag, empty text with URL (articles don't have tweetText), or pageTitle hints
+            const isArticle = tweetResult.context?.metadata?.isArticle ||
+              (!tweetResult.text && tweetResult.context?.url);
+            if (isArticle && tweetResult.context?.url && c.env.DUMPLING_API_KEY) {
+              console.log('[Webhook] Detected article tweet, enriching inline for:', tweetResult.postId);
+              // Run inline (not waitUntil) because DumplingAI takes ~18s and waitUntil may not complete
+              try {
+                await enrichArticleContent(c.env, tweetResult.postId, tweetResult.context.url);
+              } catch (e) {
+                console.error('[Webhook] Article enrichment failed:', e);
+              }
+            }
             break;
           case 'onSaveYouTubeVideo':
             console.log('[Webhook] Calling saveYouTubeVideoToDatabase...');
@@ -192,6 +206,25 @@ router.get('/health', (c) => {
     message: 'Webhook endpoint is healthy',
     timestamp: Date.now()
   });
+});
+
+/**
+ * POST /api/webhook/test-article-scrape
+ * Debug endpoint to test article scraping synchronously
+ */
+router.post('/test-article-scrape', async (c) => {
+  const { postId, url } = await c.req.json();
+  if (!c.env.DUMPLING_API_KEY) {
+    return c.json({ error: 'DUMPLING_API_KEY not set' }, 500);
+  }
+  try {
+    await enrichArticleContent(c.env, postId, url);
+    const post = await c.env.DB.prepare('SELECT LENGTH(generated_output) as len FROM posts WHERE id = ?')
+      .bind(postId).first<{ len: number | null }>();
+    return c.json({ success: true, generatedOutputLength: post?.len || 0 });
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : 'Unknown error' }, 500);
+  }
 });
 
 
@@ -458,6 +491,74 @@ async function saveProcessedTextToDatabase(c: any, userId: string, data: any) {
   ).run();
 
   console.log('[Webhook] Saved processed text to posts table:', postId);
+}
+
+/**
+ * Helper: Scrape full article content for Twitter articles/Notes
+ * Runs in background via waitUntil - stores content in generated_output
+ */
+async function enrichArticleContent(
+  env: Env,
+  postId: string,
+  tweetUrl: string
+): Promise<void> {
+  try {
+    console.log('[Webhook] Starting article scrape for post:', postId, 'url:', tweetUrl);
+
+    const articleContent = await scrapeArticleContent(env.DUMPLING_API_KEY!, tweetUrl);
+
+    if (!articleContent) {
+      console.log('[Webhook] No article content returned for post:', postId);
+      return;
+    }
+
+    console.log('[Webhook] Got article content for post:', postId, 'length:', articleContent.length);
+
+    // Store article content in generated_output (same pattern as YouTube transcripts)
+    await env.DB
+      .prepare('UPDATE posts SET generated_output = ? WHERE id = ?')
+      .bind(articleContent, postId)
+      .run();
+
+    // Update context_json to flag article content
+    const existingPost = await env.DB
+      .prepare('SELECT user_id, context_json, original_text FROM posts WHERE id = ?')
+      .bind(postId)
+      .first<{ user_id: string; context_json: string | null; original_text: string }>();
+
+    if (existingPost) {
+      const context = existingPost.context_json ? JSON.parse(existingPost.context_json) : {};
+      context.hasArticleContent = true;
+      await env.DB
+        .prepare('UPDATE posts SET context_json = ? WHERE id = ?')
+        .bind(JSON.stringify(context), postId)
+        .run();
+
+      // Re-generate embedding with combined text (original + article) for better semantic search
+      if (env.AI) {
+        const combinedText = `${existingPost.original_text} ${articleContent}`.substring(0, 10000);
+        const embedding = await generateEmbedding(env, combinedText);
+        if (embedding) {
+          await env.DB
+            .prepare('UPDATE posts SET embedding_vector = ?, embedding_model = ? WHERE id = ?')
+            .bind(JSON.stringify(embedding), EMBEDDING_MODEL, postId)
+            .run();
+
+          if (env.VECTORIZE) {
+            await insertVector(env, postId, embedding, {
+              user_id: existingPost.user_id,
+              table: 'posts',
+              type: 'tweet'
+            });
+          }
+        }
+      }
+    }
+
+    console.log('[Webhook] Article enrichment complete for post:', postId);
+  } catch (error) {
+    console.error('[Webhook] Article enrichment error for post:', postId, error);
+  }
 }
 
 /**
