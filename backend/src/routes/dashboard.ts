@@ -2,20 +2,12 @@ import { Hono } from 'hono';
 import type { Env } from '../types';
 import { dashboardPage } from '../templates/pages/dashboard';
 import { unifiedMemoriesPage } from '../templates/pages/memories-unified';
-import { aiContentPage } from '../templates/pages/ai-content';
-import { aiImagesPage } from '../templates/pages/ai-images';
 import { addContentPage } from '../templates/pages/add-content';
-import { generateCarouselPage } from '../templates/pages/generate-carousel';
 import { workSessionsPage } from '../templates/pages/work-sessions';
 import { settingsPage } from '../templates/pages/settings';
 import { tasksPage } from '../templates/pages/tasks';
 import { chatPage } from '../templates/pages/chat';
 import { insightsPage } from '../templates/pages/insights';
-import { etsyPage } from '../templates/pages/etsy';
-import { socialPostsPage } from '../templates/pages/social-posts';
-import { AirtableService } from '../services/airtable';
-import { EtsyService } from '../services/etsy';
-import { SocialPostsService } from '../services/social-posts';
 
 const router = new Hono<{ Bindings: Env }>();
 
@@ -90,47 +82,6 @@ router.get('/memories', async (c) => {
   }
 });
 
-/**
- * GET /dashboard/ai-content
- * AI-generated content listing page
- */
-router.get('/ai-content', async (c) => {
-  try {
-    const apiBase = c.env.APP_URL;
-    const result = await c.env.DB.prepare(
-      'SELECT COUNT(*) as count FROM posts WHERE generated_output IS NOT NULL AND generated_output != ?'
-    ).bind('').first<any>();
-    const count = result?.count || 0;
-
-    const html = aiContentPage({ count, apiBase });
-    return c.html(html);
-
-  } catch (error: any) {
-    console.error('AI Content page error:', error);
-    return c.html(errorPage('AI Content Error', error.message), 500);
-  }
-});
-
-/**
- * GET /dashboard/ai-images
- * Unified AI Images page - generate new images and view gallery
- */
-router.get('/ai-images', async (c) => {
-  try {
-    const apiBase = c.env.APP_URL;
-    // Get count of images from R2
-    const listed = await c.env.STORAGE.list({ prefix: 'ai-images/', limit: 1000 });
-    const count = listed.objects.length;
-
-    const html = aiImagesPage({ count, apiBase, userId: DEFAULT_USER_ID });
-    return c.html(html);
-
-  } catch (error: any) {
-    console.error('AI Images page error:', error);
-    return c.html(errorPage('AI Images Error', error.message), 500);
-  }
-});
-
 // Default user ID for dashboard forms (can be customized per user in future)
 const DEFAULT_USER_ID = 'dashboard_user';
 
@@ -147,21 +98,6 @@ router.get('/add', async (c) => {
   } catch (error: any) {
     console.error('Add Content page error:', error);
     return c.html(errorPage('Add Content Error', error.message), 500);
-  }
-});
-
-/**
- * GET /dashboard/generate-carousel
- * Generate Instagram carousel page
- */
-router.get('/generate-carousel', async (c) => {
-  try {
-    const apiBase = c.env.APP_URL;
-    const html = generateCarouselPage({ apiBase });
-    return c.html(html);
-  } catch (error: any) {
-    console.error('Generate Carousel page error:', error);
-    return c.html(errorPage('Generate Carousel Error', error.message), 500);
   }
 });
 
@@ -186,7 +122,7 @@ router.get('/work-sessions', async (c) => {
 
 /**
  * GET /dashboard/settings
- * Unified settings page - AI models, webhooks, and Airtable configuration
+ * Settings page - AI models and webhooks configuration
  */
 router.get('/settings', async (c) => {
   try {
@@ -211,17 +147,10 @@ router.get('/settings', async (c) => {
     const webhooksResult = await c.env.DB.prepare('SELECT COUNT(*) as count FROM webhook_events').first<any>();
     const webhooksCount = webhooksResult?.count || 0;
 
-    // Check if Airtable is configured
-    const airtable = new AirtableService(c.env);
-    const airtableConfigured = airtable.isConfigured();
-    const airtableBaseId = c.env.AIRTABLE_BASE_ID || '';
-
     const html = settingsPage({
       apiBase,
       settings: displaySettings,
       webhooksCount,
-      airtableConfigured,
-      airtableBaseId
     });
     return c.html(html);
 
@@ -310,68 +239,6 @@ router.get('/insights', async (c) => {
   } catch (error: any) {
     console.error('Insights page error:', error);
     return c.html(errorPage('Insights Error', error.message), 500);
-  }
-});
-
-/**
- * GET /dashboard/etsy
- * Etsy product management page - products, images, listings from Airtable
- */
-router.get('/etsy', async (c) => {
-  try {
-    const apiBase = c.env.APP_URL;
-    const etsy = new EtsyService(c.env);
-
-    // Check if Etsy Airtable is configured
-    const isConfigured = etsy.isConfigured();
-
-    // Get summary stats if configured
-    let summary = null;
-    if (isConfigured) {
-      try {
-        summary = await etsy.getSummary();
-      } catch (err) {
-        console.error('Failed to load Etsy summary:', err);
-      }
-    }
-
-    const html = etsyPage({ apiBase, isConfigured, summary });
-    return c.html(html);
-
-  } catch (error: any) {
-    console.error('Etsy page error:', error);
-    return c.html(errorPage('Etsy Error', error.message), 500);
-  }
-});
-
-/**
- * GET /dashboard/social-posts
- * Social Posts management page - profiles, posts, templates, images from Airtable
- */
-router.get('/social-posts', async (c) => {
-  try {
-    const apiBase = c.env.APP_URL;
-    const social = new SocialPostsService(c.env);
-
-    // Check if Social Posts Airtable is configured
-    const isConfigured = social.isConfigured();
-
-    // Get summary stats if configured
-    let summary = null;
-    if (isConfigured) {
-      try {
-        summary = await social.getSummary();
-      } catch (err) {
-        console.error('Failed to load Social Posts summary:', err);
-      }
-    }
-
-    const html = socialPostsPage({ apiBase, isConfigured, summary });
-    return c.html(html);
-
-  } catch (error: any) {
-    console.error('Social Posts page error:', error);
-    return c.html(errorPage('Social Posts Error', error.message), 500);
   }
 });
 

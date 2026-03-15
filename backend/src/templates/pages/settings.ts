@@ -1,5 +1,5 @@
 /**
- * Unified Settings page with tabs for AI models, webhooks, and Airtable
+ * Settings page with tabs for AI models and webhooks
  */
 
 import { baseLayout } from '../layouts/base';
@@ -16,18 +16,16 @@ export interface SettingsPageProps {
     openrouterApiKey?: string;
   };
   webhooksCount?: number;
-  airtableConfigured?: boolean;
-  airtableBaseId?: string;
 }
 
-export function settingsPage({ apiBase, settings, webhooksCount = 0, airtableConfigured = false, airtableBaseId }: SettingsPageProps): string {
+export function settingsPage({ apiBase, settings, webhooksCount = 0 }: SettingsPageProps): string {
   const content = `
     ${nav({ currentPage: '/dashboard/settings', apiBase })}
 
     <div class="container">
       ${pageHeader({
         title: 'Settings',
-        subtitle: 'Configure AI models, webhooks, and integrations',
+        subtitle: 'Configure AI models and webhooks',
         icon: '⚙️',
         backLink: '/dashboard'
       })}
@@ -40,9 +38,6 @@ export function settingsPage({ apiBase, settings, webhooksCount = 0, airtableCon
         <button class="settings-tab" data-tab="webhooks">
           📡 Webhooks
           ${webhooksCount > 0 ? `<span class="tab-badge">${webhooksCount}</span>` : ''}
-        </button>
-        <button class="settings-tab" data-tab="airtable">
-          📊 Airtable
         </button>
       </div>
 
@@ -190,49 +185,6 @@ export function settingsPage({ apiBase, settings, webhooksCount = 0, airtableCon
 
         <!-- Pagination -->
         <div id="webhook-pagination" class="pagination"></div>
-      </div>
-
-      <!-- Airtable Tab -->
-      <div id="airtable-tab" class="tab-content">
-        ${!airtableConfigured ? `
-          <div class="config-warning">
-            <span class="warning-icon">⚠️</span>
-            <div class="warning-content">
-              <strong>Airtable Not Configured</strong>
-              <p>Set AIRTABLE_API_KEY and AIRTABLE_BASE_ID environment variables to enable this feature.</p>
-            </div>
-          </div>
-        ` : ''}
-
-        <!-- Dynamic Tabs Container -->
-        <div id="airtable-tabs" class="airtable-tabs">
-          <div class="loading-inline">Loading tables...</div>
-        </div>
-
-        <!-- Toolbar -->
-        <div class="toolbar">
-          <div class="search-box">
-            <input type="text" id="airtable-search" placeholder="Search records..." />
-            <span class="search-icon">🔍</span>
-          </div>
-          <div class="toolbar-actions">
-            <select id="max-records" class="select-input">
-              <option value="25">25 records</option>
-              <option value="50">50 records</option>
-              <option value="100" selected>100 records</option>
-              <option value="500">500 records</option>
-            </select>
-            <button id="airtable-refresh" class="btn-secondary" ${!airtableConfigured ? 'disabled' : ''}>
-              🔄 Refresh
-            </button>
-          </div>
-        </div>
-
-        <!-- Dynamic Content Container -->
-        <div id="airtable-content">
-          ${airtableConfigured ? '<div class="loading-container"><div class="loading"></div></div>' :
-            '<div class="no-results"><p>Configure Airtable to view data</p></div>'}
-        </div>
       </div>
 
       <!-- Toast Notifications -->
@@ -630,52 +582,6 @@ export function settingsPage({ apiBase, settings, webhooksCount = 0, airtableCon
         margin: 0;
       }
 
-      .airtable-tabs {
-        display: flex;
-        gap: 0.25rem;
-        margin-bottom: 1.5rem;
-        border-bottom: 1px solid var(--border);
-        padding-bottom: 0;
-        flex-wrap: wrap;
-        min-height: 42px;
-        align-items: center;
-      }
-
-      .airtable-tab {
-        display: flex;
-        align-items: center;
-        gap: 0.35rem;
-        padding: 0.5rem 0.75rem;
-        background: none;
-        border: none;
-        border-bottom: 2px solid transparent;
-        font-size: 0.8rem;
-        font-weight: 500;
-        color: var(--text-secondary);
-        cursor: pointer;
-        transition: all 0.2s;
-        white-space: nowrap;
-      }
-
-      .airtable-tab:hover { color: var(--text-primary); }
-
-      .airtable-tab.active {
-        color: var(--primary);
-        border-bottom-color: var(--primary);
-      }
-
-      .airtable-tab-count {
-        background: var(--background);
-        padding: 0.1rem 0.4rem;
-        border-radius: 99px;
-        font-size: 0.7rem;
-      }
-
-      .airtable-tab.active .airtable-tab-count {
-        background: var(--primary-light);
-        color: var(--primary);
-      }
-
       .no-results {
         text-align: center;
         padding: 3rem;
@@ -863,8 +769,6 @@ export function settingsPage({ apiBase, settings, webhooksCount = 0, airtableCon
   const scripts = `
     <script>
       const API_BASE = '${apiBase}';
-      const AIRTABLE_CONFIGURED = ${airtableConfigured};
-      const AIRTABLE_BASE_ID = '${airtableBaseId || ''}';
 
       // Tab switching
       document.querySelectorAll('.settings-tab').forEach(tab => {
@@ -883,9 +787,6 @@ export function settingsPage({ apiBase, settings, webhooksCount = 0, airtableCon
           if (targetTab === 'webhooks' && !window.webhooksLoaded) {
             loadWebhooks();
             window.webhooksLoaded = true;
-          } else if (targetTab === 'airtable' && !window.airtableLoaded && AIRTABLE_CONFIGURED) {
-            loadAirtableTables();
-            window.airtableLoaded = true;
           }
         });
       });
@@ -895,9 +796,6 @@ export function settingsPage({ apiBase, settings, webhooksCount = 0, airtableCon
 
       // Webhooks functionality
       ${getWebhooksScript()}
-
-      // Airtable functionality
-      ${getAirtableScript()}
 
       // Initialize AI models tab on page load
       init();
@@ -1329,173 +1227,3 @@ function getWebhooksScript(): string {
   `;
 }
 
-// Helper function to get Airtable script (simplified version)
-function getAirtableScript(): string {
-  return `
-    let airtableTables = [];
-    let currentAirtableTable = null;
-    let currentAirtableRecords = [];
-    let airtableSearch = '';
-
-    document.getElementById('airtable-search')?.addEventListener('input', debounce(function(e) {
-      airtableSearch = e.target.value.toLowerCase();
-      renderAirtableRecords(filterAirtableRecords(currentAirtableRecords));
-    }, 300));
-
-    document.getElementById('airtable-refresh')?.addEventListener('click', function() {
-      if (currentAirtableTable) {
-        loadAirtableRecords(currentAirtableTable.id, true);
-      }
-    });
-
-    document.getElementById('max-records')?.addEventListener('change', function() {
-      if (currentAirtableTable) {
-        loadAirtableRecords(currentAirtableTable.id, true);
-      }
-    });
-
-    async function loadAirtableTables() {
-      if (!AIRTABLE_CONFIGURED) return;
-
-      try {
-        const response = await fetch(API_BASE + '/api/airtable/tables/summary?noCache=true');
-        const data = await response.json();
-
-        if (data.success && data.data) {
-          airtableTables = data.data.tables;
-          renderAirtableTabs(airtableTables);
-
-          if (airtableTables.length > 0) {
-            selectAirtableTable(airtableTables[0].id);
-          }
-        } else {
-          showToast('Failed to load Airtable tables', 'error');
-        }
-      } catch (error) {
-        console.error('Failed to load Airtable tables:', error);
-        showToast('Failed to load Airtable tables', 'error');
-      }
-    }
-
-    function renderAirtableTabs(tables) {
-      const container = document.getElementById('airtable-tabs');
-
-      if (!tables || tables.length === 0) {
-        container.innerHTML = '<div class="loading-inline">No tables found</div>';
-        return;
-      }
-
-      container.innerHTML = tables.map(table => \`
-        <button class="airtable-tab" data-table-id="\${table.id}" title="\${table.name}">
-          \${getTableIcon(table.name)}
-          <span class="tab-name">\${table.name}</span>
-          <span class="airtable-tab-count">\${table.recordCount || 0}</span>
-        </button>
-      \`).join('');
-
-      container.querySelectorAll('.airtable-tab').forEach(tab => {
-        tab.addEventListener('click', function() {
-          selectAirtableTable(this.dataset.tableId);
-        });
-      });
-    }
-
-    function getTableIcon(name) {
-      const n = name.toLowerCase();
-      if (n.includes('profile')) return '📋';
-      if (n.includes('content')) return '📝';
-      if (n.includes('video')) return '📹';
-      if (n.includes('tweet')) return '🐦';
-      return '📊';
-    }
-
-    function selectAirtableTable(tableId) {
-      document.querySelectorAll('.airtable-tab').forEach(t => t.classList.remove('active'));
-      const tab = document.querySelector('[data-table-id="' + tableId + '"]');
-      if (tab) tab.classList.add('active');
-
-      currentAirtableTable = airtableTables.find(t => t.id === tableId);
-      loadAirtableRecords(tableId);
-    }
-
-    async function loadAirtableRecords(tableId, noCache = false) {
-      const container = document.getElementById('airtable-content');
-      container.innerHTML = '<div class="loading-container"><div class="loading"></div></div>';
-
-      const maxRecords = document.getElementById('max-records')?.value || 100;
-
-      try {
-        const url = API_BASE + '/api/airtable/tables/' + encodeURIComponent(tableId) +
-                    '/records?maxRecords=' + maxRecords + (noCache ? '&noCache=true' : '');
-        const response = await fetch(url);
-        const data = await response.json();
-
-        if (data.success && data.data) {
-          currentAirtableRecords = data.data;
-          renderAirtableTableView();
-        } else {
-          container.innerHTML = '<div class="no-results"><p>' + (data.error || 'Failed to load records') + '</p></div>';
-        }
-      } catch (error) {
-        console.error('Failed to load Airtable records:', error);
-        container.innerHTML = '<div class="no-results"><p>Failed to load records</p></div>';
-      }
-    }
-
-    function filterAirtableRecords(records) {
-      if (!airtableSearch) return records;
-      return records.filter(r => {
-        const str = JSON.stringify(r.fields).toLowerCase();
-        return str.includes(airtableSearch);
-      });
-    }
-
-    function renderAirtableRecords(records) {
-      const container = document.getElementById('airtable-content');
-      if (!records || records.length === 0) {
-        container.innerHTML = '<div class="no-results"><p>No records found</p></div>';
-        return;
-      }
-      renderAirtableTableView();
-    }
-
-    function renderAirtableTableView() {
-      const container = document.getElementById('airtable-content');
-      const filtered = filterAirtableRecords(currentAirtableRecords);
-
-      if (!filtered || filtered.length === 0) {
-        container.innerHTML = '<div class="no-results"><p>No records found</p></div>';
-        return;
-      }
-
-      container.innerHTML = \`
-        <p style="text-align: center; color: var(--text-secondary); font-size: 0.875rem; padding: 2rem;">
-          Showing \${filtered.length} of \${currentAirtableRecords.length} records from \${currentAirtableTable?.name || 'table'}
-        </p>
-      \`;
-    }
-
-    function showToast(message, type) {
-      const toast = document.getElementById('toast');
-      toast.textContent = message;
-      toast.className = 'toast ' + type + ' show';
-
-      setTimeout(() => {
-        toast.classList.remove('show');
-      }, 4000);
-    }
-
-    function truncate(str, len) {
-      if (!str) return '';
-      return str.length > len ? str.substring(0, len) + '...' : str;
-    }
-
-    function debounce(func, wait) {
-      let timeout;
-      return function(...args) {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => func.apply(this, args), wait);
-      };
-    }
-  `;
-}

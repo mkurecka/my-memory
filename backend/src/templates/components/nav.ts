@@ -16,25 +16,20 @@ export function nav({ currentPage, apiBase }: NavProps): string {
         { path: '/dashboard', label: 'Overview', icon: '📊' },
         { path: '/dashboard/memories', label: 'Memories', icon: '🧠' },
         { path: '/dashboard/insights', label: 'Insights', icon: '💡' },
-        { path: '/dashboard/ai-content', label: 'AI Content', icon: '✨' },
       ]
     },
     {
-      label: 'Create',
+      label: 'Tools',
       links: [
         { path: '/dashboard/add', label: 'Add Content', icon: '➕' },
-        { path: '/dashboard/ai-images', label: 'AI Images', icon: '🎨' },
-        { path: '/dashboard/generate-carousel', label: 'Carousel', icon: '📱' },
+        { path: '/dashboard/chat', label: 'Chat', icon: '💬' },
+        { path: '/dashboard/tasks', label: 'Tasks', icon: '📋' },
+        { path: '/dashboard/work-sessions', label: 'Sessions', icon: '📝' },
       ]
     },
     {
       label: 'Admin',
       links: [
-        { path: '/dashboard/chat', label: 'Chat', icon: '💬' },
-        { path: '/dashboard/tasks', label: 'Tasks', icon: '📋' },
-        { path: '/dashboard/work-sessions', label: 'Sessions', icon: '📝' },
-        { path: '/dashboard/etsy', label: 'Etsy', icon: '🏪' },
-        { path: '/dashboard/social-posts', label: 'Social', icon: '📣' },
         { path: '/dashboard/settings', label: 'Settings', icon: '⚙️' },
       ]
     }
