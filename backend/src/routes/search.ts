@@ -207,6 +207,8 @@ search.get('/recent', async (c) => {
     const hasGenerated = c.req.query('hasGenerated') === 'true'; // Filter for AI content
     const searchQuery = c.req.query('q')?.trim(); // Text search query
     const tagFilter = c.req.query('tag')?.trim(); // Filter by tag (link, video, tweet)
+    const categoryFilter = c.req.query('category')?.trim();
+    const priorityFilter = c.req.query('priority')?.trim();
 
     // Date range filters (ISO date strings or timestamps)
     const startDate = c.req.query('startDate');
@@ -283,6 +285,14 @@ search.get('/recent', async (c) => {
         conditions.push('created_at < ?');
         bindings.push(endTimestamp);
       }
+      if (categoryFilter) {
+        conditions.push("json_extract(context_json, '$.analysis.category') = ?");
+        bindings.push(categoryFilter);
+      }
+      if (priorityFilter) {
+        conditions.push("json_extract(context_json, '$.analysis.actionPriority') = ?");
+        bindings.push(priorityFilter);
+      }
 
       const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
       sql = `SELECT id, type, original_text, generated_output, created_at, context_json
@@ -314,6 +324,14 @@ search.get('/recent', async (c) => {
           conditions.push('tag = ?');
           bindings.push(tagFilter);
         }
+      }
+      if (categoryFilter) {
+        conditions.push("json_extract(context_json, '$.analysis.category') = ?");
+        bindings.push(categoryFilter);
+      }
+      if (priorityFilter) {
+        conditions.push("json_extract(context_json, '$.analysis.actionPriority') = ?");
+        bindings.push(priorityFilter);
       }
       if (startTimestamp) {
         conditions.push('created_at >= ?');
@@ -471,6 +489,174 @@ search.patch('/post/:id/transcript', async (c) => {
     });
   } catch (error: any) {
     console.error('Save transcript error:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+/**
+ * GET /api/search/topics
+ * Get all unique topics and categories from analyzed content
+ * Used for topic filter dropdowns on the memories page
+ */
+search.get('/topics', async (c) => {
+  try {
+    // Query both memory and posts tables for analysis data
+    const [memoryTopics, postsTopics] = await Promise.all([
+      c.env.DB.prepare(`
+        SELECT
+          json_extract(context_json, '$.analysis.category') as category,
+          json_extract(context_json, '$.analysis.topics') as topics,
+          json_extract(context_json, '$.analysis.actionPriority') as priority
+        FROM memory
+        WHERE context_json LIKE '%"analysis":%'
+      `).all(),
+      c.env.DB.prepare(`
+        SELECT
+          json_extract(context_json, '$.analysis.category') as category,
+          json_extract(context_json, '$.analysis.topics') as topics,
+          json_extract(context_json, '$.analysis.actionPriority') as priority
+        FROM posts
+        WHERE context_json LIKE '%"analysis":%'
+      `).all()
+    ]);
+
+    // Aggregate categories and topics
+    const categories: Record<string, number> = {};
+    const topics: Record<string, number> = {};
+    const priorities: Record<string, number> = {};
+
+    for (const row of [...(memoryTopics.results || []), ...(postsTopics.results || [])] as any[]) {
+      if (row.category) {
+        categories[row.category] = (categories[row.category] || 0) + 1;
+      }
+      if (row.priority) {
+        priorities[row.priority] = (priorities[row.priority] || 0) + 1;
+      }
+      if (row.topics) {
+        try {
+          const topicList = JSON.parse(row.topics);
+          for (const t of topicList) {
+            topics[t] = (topics[t] || 0) + 1;
+          }
+        } catch { /* ignore */ }
+      }
+    }
+
+    return c.json({
+      success: true,
+      categories: Object.entries(categories).sort((a, b) => b[1] - a[1]),
+      topics: Object.entries(topics).sort((a, b) => b[1] - a[1]).slice(0, 50),
+      priorities: Object.entries(priorities).sort((a, b) => b[1] - a[1])
+    });
+  } catch (error: any) {
+    console.error('Topics error:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+/**
+ * GET /api/search/related/:id
+ * Find items related to a given memory/post using vector similarity
+ */
+search.get('/related/:id', async (c) => {
+  try {
+    const id = c.req.param('id');
+    const limit = parseInt(c.req.query('limit') || '5');
+
+    // Try to find the item in memory table first, then posts
+    let embedding: string | null = null;
+
+    const memItem = await c.env.DB.prepare(
+      'SELECT embedding_vector FROM memory WHERE id = ?'
+    ).bind(id).first<{ embedding_vector: string }>();
+
+    if (memItem?.embedding_vector) {
+      embedding = memItem.embedding_vector;
+    } else {
+      const postItem = await c.env.DB.prepare(
+        'SELECT embedding_vector FROM posts WHERE id = ?'
+      ).bind(id).first<{ embedding_vector: string }>();
+      if (postItem?.embedding_vector) {
+        embedding = postItem.embedding_vector;
+      }
+    }
+
+    if (!embedding) {
+      return c.json({ success: true, results: [], count: 0 });
+    }
+
+    const embeddingVector = JSON.parse(embedding);
+
+    if (!c.env.VECTORIZE) {
+      return c.json({ success: true, results: [], count: 0 });
+    }
+
+    // Query Vectorize for similar items (request extra to filter out self)
+    const vectorResults = await c.env.VECTORIZE.query(embeddingVector, {
+      topK: limit + 1,
+      returnMetadata: 'all'
+    });
+
+    // Filter out the source item itself
+    const filtered = vectorResults.matches
+      .filter(m => m.id !== id)
+      .slice(0, limit);
+
+    if (filtered.length === 0) {
+      return c.json({ success: true, results: [], count: 0 });
+    }
+
+    // Fetch full records
+    const results: any[] = [];
+    for (const match of filtered) {
+      const meta = match.metadata as any;
+      const table = meta?.table || 'memory';
+
+      let item: any = null;
+      if (table === 'posts') {
+        item = await c.env.DB.prepare(
+          'SELECT id, type, original_text, context_json, created_at FROM posts WHERE id = ?'
+        ).bind(match.id).first();
+        if (item) {
+          let ctx: any = {};
+          try { ctx = JSON.parse(item.context_json || '{}'); } catch {}
+          results.push({
+            id: item.id,
+            type: item.type,
+            title: ctx.title || ctx.author?.name || item.original_text?.substring(0, 100),
+            text: item.original_text?.substring(0, 200),
+            score: match.score,
+            source: 'posts',
+            createdAt: item.created_at
+          });
+        }
+      } else {
+        item = await c.env.DB.prepare(
+          'SELECT id, text, context_json, tag, created_at FROM memory WHERE id = ?'
+        ).bind(match.id).first();
+        if (item) {
+          let ctx: any = {};
+          try { ctx = JSON.parse(item.context_json || '{}'); } catch {}
+          results.push({
+            id: item.id,
+            type: item.tag || 'memory',
+            title: ctx.title || item.text?.substring(0, 100),
+            text: item.text?.substring(0, 200),
+            score: match.score,
+            source: 'memory',
+            createdAt: item.created_at
+          });
+        }
+      }
+    }
+
+    return c.json({
+      success: true,
+      results,
+      count: results.length
+    });
+  } catch (error: any) {
+    console.error('Related items error:', error);
     return c.json({ success: false, error: error.message }, 500);
   }
 });

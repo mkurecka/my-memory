@@ -6,7 +6,6 @@ import { aiContentPage } from '../templates/pages/ai-content';
 import { aiImagesPage } from '../templates/pages/ai-images';
 import { addContentPage } from '../templates/pages/add-content';
 import { generateCarouselPage } from '../templates/pages/generate-carousel';
-import { claudeSessionsPage } from '../templates/pages/claude-sessions';
 import { workSessionsPage } from '../templates/pages/work-sessions';
 import { settingsPage } from '../templates/pages/settings';
 import { tasksPage } from '../templates/pages/tasks';
@@ -163,25 +162,6 @@ router.get('/generate-carousel', async (c) => {
   } catch (error: any) {
     console.error('Generate Carousel page error:', error);
     return c.html(errorPage('Generate Carousel Error', error.message), 500);
-  }
-});
-
-/**
- * GET /dashboard/claude-sessions
- * Claude Code sessions page
- */
-router.get('/claude-sessions', async (c) => {
-  try {
-    const apiBase = c.env.APP_URL;
-    const result = await c.env.DB.prepare('SELECT COUNT(*) as count FROM claude_sessions').first<any>();
-    const count = result?.count || 0;
-
-    const html = claudeSessionsPage({ count, apiBase });
-    return c.html(html);
-
-  } catch (error: any) {
-    console.error('Claude Sessions page error:', error);
-    return c.html(errorPage('Claude Sessions Error', error.message), 500);
   }
 });
 

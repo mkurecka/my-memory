@@ -62,6 +62,20 @@ export function unifiedMemoriesPage({ counts, apiBase }: UnifiedMemoriesPageProp
         </div>
       </div>
 
+      <!-- Topic/Category Filters -->
+      <div class="topic-filters" id="topic-filters" style="display: none;">
+        <select id="category-filter">
+          <option value="">All Categories</option>
+        </select>
+        <select id="priority-filter">
+          <option value="">All Priorities</option>
+          <option value="high">High Priority</option>
+          <option value="medium">Medium Priority</option>
+          <option value="low">Low Priority</option>
+        </select>
+        <div class="active-filters" id="active-filters"></div>
+      </div>
+
       <!-- Items Grid -->
       <div id="items-container">
         ${counts.total === 0 ? emptyState({
@@ -381,6 +395,114 @@ export function unifiedMemoriesPage({ counts, apiBase }: UnifiedMemoriesPageProp
         text-align: center;
         padding: 3rem;
         color: var(--text-secondary);
+      }
+
+      /* Topic Filters */
+      .topic-filters {
+        display: flex;
+        gap: 0.75rem;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      .topic-filters select {
+        padding: 0.5rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface);
+        font-size: 0.85rem;
+        cursor: pointer;
+      }
+
+      .active-filters {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
+
+      .filter-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.25rem 0.625rem;
+        background: var(--primary-light);
+        color: var(--primary);
+        border-radius: 999px;
+        font-size: 0.8rem;
+        font-weight: 500;
+      }
+
+      .filter-tag button {
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 1rem;
+        color: var(--primary);
+        padding: 0;
+        line-height: 1;
+      }
+
+      /* Related Items in modal */
+      .related-items {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+
+      .related-item {
+        display: flex;
+        gap: 0.75rem;
+        padding: 0.75rem;
+        background: var(--background);
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .related-item:hover {
+        background: var(--primary-light);
+      }
+
+      .related-item-score {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        white-space: nowrap;
+      }
+
+      .related-item-title {
+        font-size: 0.875rem;
+        color: var(--text-primary);
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .related-item-type {
+        font-size: 0.7rem;
+        padding: 0.125rem 0.375rem;
+        border-radius: 4px;
+        text-transform: uppercase;
+        font-weight: 600;
+      }
+
+      /* Analysis Badges */
+      .analysis-badge {
+        font-size: 0.7rem;
+        padding: 0.125rem 0.5rem;
+        border-radius: 4px;
+        font-weight: 500;
+      }
+
+      .analysis-badge.category {
+        background: #fef3c7;
+        color: #92400e;
+      }
+
+      .analysis-badge.priority-high {
+        background: #fee2e2;
+        color: #dc2626;
       }
 
       /* Modal Styles */
@@ -713,6 +835,8 @@ export function unifiedMemoriesPage({ counts, apiBase }: UnifiedMemoriesPageProp
       let currentSearch = '';
       let currentSort = 'newest';
       let currentType = 'all';
+      let currentCategory = '';
+      let currentPriority = '';
       const perPage = 20;
 
       // Filter button handlers
@@ -736,7 +860,7 @@ export function unifiedMemoriesPage({ counts, apiBase }: UnifiedMemoriesPageProp
           let total = 0;
 
           if (currentType === 'all' || currentType === 'memory') {
-            const memoryUrl = API_BASE + '/api/search/recent?table=memory&limit=' + perPage + '&offset=' + offset + (currentSearch ? '&q=' + encodeURIComponent(currentSearch) : '');
+            const memoryUrl = API_BASE + '/api/search/recent?table=memory&limit=' + perPage + '&offset=' + offset + (currentSearch ? '&q=' + encodeURIComponent(currentSearch) : '') + (currentCategory ? '&category=' + encodeURIComponent(currentCategory) : '') + (currentPriority ? '&priority=' + encodeURIComponent(currentPriority) : '');
             const memRes = await fetch(memoryUrl);
             const memData = await memRes.json();
             if (memData.success && memData.results) {
@@ -746,7 +870,7 @@ export function unifiedMemoriesPage({ counts, apiBase }: UnifiedMemoriesPageProp
           }
 
           if (currentType === 'all' || currentType === 'tweet') {
-            const tweetUrl = API_BASE + '/api/search/recent?table=posts&type=tweet&limit=' + perPage + '&offset=' + offset + (currentSearch ? '&q=' + encodeURIComponent(currentSearch) : '');
+            const tweetUrl = API_BASE + '/api/search/recent?table=posts&type=tweet&limit=' + perPage + '&offset=' + offset + (currentSearch ? '&q=' + encodeURIComponent(currentSearch) : '') + (currentCategory ? '&category=' + encodeURIComponent(currentCategory) : '') + (currentPriority ? '&priority=' + encodeURIComponent(currentPriority) : '');
             const tweetRes = await fetch(tweetUrl);
             const tweetData = await tweetRes.json();
             if (tweetData.success && tweetData.results) {
@@ -756,7 +880,7 @@ export function unifiedMemoriesPage({ counts, apiBase }: UnifiedMemoriesPageProp
           }
 
           if (currentType === 'all' || currentType === 'youtube_video') {
-            const videoUrl = API_BASE + '/api/search/recent?table=posts&type=youtube_video&limit=' + perPage + '&offset=' + offset + (currentSearch ? '&q=' + encodeURIComponent(currentSearch) : '');
+            const videoUrl = API_BASE + '/api/search/recent?table=posts&type=youtube_video&limit=' + perPage + '&offset=' + offset + (currentSearch ? '&q=' + encodeURIComponent(currentSearch) : '') + (currentCategory ? '&category=' + encodeURIComponent(currentCategory) : '') + (currentPriority ? '&priority=' + encodeURIComponent(currentPriority) : '');
             const videoRes = await fetch(videoUrl);
             const videoData = await videoRes.json();
             if (videoData.success && videoData.results) {
@@ -866,6 +990,8 @@ export function unifiedMemoriesPage({ counts, apiBase }: UnifiedMemoriesPageProp
                 <span class="item-meta-item">📅 \${dateStr}</span>
                 \${hasTranscript ? '<span class="item-meta-item transcript-badge" title="Transcript available">📜</span>' : ''}
                 \${link ? \`<a href="\${link}" target="_blank" class="item-link item-meta-item" onclick="event.stopPropagation()">🔗 \${linkText}</a>\` : ''}
+                \${context.analysis && context.analysis.category ? '<span class="analysis-badge category">' + escapeHtml(context.analysis.category) + '</span>' : ''}
+                \${context.analysis && context.analysis.actionPriority === 'high' ? '<span class="analysis-badge priority-high">High Priority</span>' : ''}
                 <button class="delete-btn" onclick="event.stopPropagation(); deleteItem('\${item.id}', '\${type}', this)" title="Delete">🗑️</button>
               </div>
             </div>
@@ -916,6 +1042,68 @@ export function unifiedMemoriesPage({ counts, apiBase }: UnifiedMemoriesPageProp
         currentSort = e.target.value;
         loadItems();
       });
+
+      document.getElementById('category-filter').addEventListener('change', function(e) {
+        currentCategory = e.target.value;
+        currentPage = 1;
+        updateActiveFilters();
+        loadItems();
+      });
+
+      document.getElementById('priority-filter').addEventListener('change', function(e) {
+        currentPriority = e.target.value;
+        currentPage = 1;
+        updateActiveFilters();
+        loadItems();
+      });
+
+      function updateActiveFilters() {
+        const container = document.getElementById('active-filters');
+        let html = '';
+        if (currentCategory) {
+          html += '<span class="filter-tag">' + escapeHtml(currentCategory) + ' <button onclick="clearFilter(\\'category\\')">&times;</button></span>';
+        }
+        if (currentPriority) {
+          html += '<span class="filter-tag">' + currentPriority + ' priority <button onclick="clearFilter(\\'priority\\')">&times;</button></span>';
+        }
+        container.innerHTML = html;
+      }
+
+      function clearFilter(type) {
+        if (type === 'category') {
+          currentCategory = '';
+          document.getElementById('category-filter').value = '';
+        } else if (type === 'priority') {
+          currentPriority = '';
+          document.getElementById('priority-filter').value = '';
+        }
+        currentPage = 1;
+        updateActiveFilters();
+        loadItems();
+      }
+
+      async function loadTopicFilters() {
+        try {
+          const res = await fetch(API_BASE + '/api/search/topics');
+          const data = await res.json();
+          if (!data.success) return;
+
+          const categorySelect = document.getElementById('category-filter');
+          if (data.categories) {
+            for (const [cat, count] of data.categories) {
+              const opt = document.createElement('option');
+              opt.value = cat;
+              opt.textContent = cat + ' (' + count + ')';
+              categorySelect.appendChild(opt);
+            }
+          }
+
+          document.getElementById('topic-filters').style.display = 'flex';
+        } catch (err) {
+          console.log('Topic filters not available:', err);
+        }
+      }
+      loadTopicFilters();
 
       function debounce(func, wait) {
         let timeout;
@@ -1040,11 +1228,19 @@ export function unifiedMemoriesPage({ counts, apiBase }: UnifiedMemoriesPageProp
             </form>
           </div>
 
+          <div class="detail-section" id="related-section">
+            <h3 class="detail-section-title">🔗 Related Items</h3>
+            <div class="related-items" id="related-items-container">
+              <div style="text-align: center; color: var(--text-secondary); padding: 1rem;">Loading...</div>
+            </div>
+          </div>
+
           <div style="margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--border);font-size:0.8rem;color:var(--text-secondary);">
             <span>💾 Saved: \${savedAt}</span>
             <span style="margin-left:1rem;">🆔 ID: \${item.id}</span>
           </div>
         \`;
+        loadRelatedItems(item.id);
       }
 
       function renderTweetModal(item, container) {
@@ -1105,11 +1301,19 @@ export function unifiedMemoriesPage({ counts, apiBase }: UnifiedMemoriesPageProp
             </form>
           </div>
 
+          <div class="detail-section" id="related-section">
+            <h3 class="detail-section-title">🔗 Related Items</h3>
+            <div class="related-items" id="related-items-container">
+              <div style="text-align: center; color: var(--text-secondary); padding: 1rem;">Loading...</div>
+            </div>
+          </div>
+
           <div style="margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--border);font-size:0.8rem;color:var(--text-secondary);">
             <span>💾 Saved: \${savedAt}</span>
             <span style="margin-left:1rem;">🆔 ID: \${item.id}</span>
           </div>
         \`;
+        loadRelatedItems(item.id);
       }
 
       function renderMemoryModal(item, container) {
@@ -1160,10 +1364,73 @@ export function unifiedMemoriesPage({ counts, apiBase }: UnifiedMemoriesPageProp
             </form>
           </div>
 
+          <div class="detail-section" id="related-section">
+            <h3 class="detail-section-title">🔗 Related Items</h3>
+            <div class="related-items" id="related-items-container">
+              <div style="text-align: center; color: var(--text-secondary); padding: 1rem;">Loading...</div>
+            </div>
+          </div>
+
           <div style="margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--border);font-size:0.8rem;color:var(--text-secondary);">
             <span>🆔 ID: \${item.id}</span>
           </div>
         \`;
+        loadRelatedItems(item.id);
+      }
+
+      async function loadRelatedItems(itemId) {
+        try {
+          const res = await fetch(API_BASE + '/api/search/related/' + itemId + '?limit=5');
+          const data = await res.json();
+          if (!data.success || !data.results || data.results.length === 0) {
+            const container = document.getElementById('related-items-container');
+            if (container) container.innerHTML = '<div style="text-align:center;color:var(--text-secondary);padding:0.75rem;font-size:0.85rem;">No related items found</div>';
+            return;
+          }
+
+          const container = document.getElementById('related-items-container');
+          if (!container) return;
+
+          const typeColors = {
+            memory: '#ede9fe',
+            tweet: '#e0f2fe',
+            youtube_video: '#fee2e2',
+            link: '#ecfdf5'
+          };
+          const typeTextColors = {
+            memory: '#7c3aed',
+            tweet: '#0284c7',
+            youtube_video: '#dc2626',
+            link: '#059669'
+          };
+
+          container.innerHTML = data.results.map(function(item) {
+            return '<div class="related-item" onclick="openRelatedItem(\\'' + item.id + '\\', \\'' + (item.source || '') + '\\')">' +
+              '<span class="related-item-type" style="background: ' + (typeColors[item.type] || '#f3f4f6') + '; color: ' + (typeTextColors[item.type] || '#6b7280') + '">' + (item.type || 'item') + '</span>' +
+              '<span class="related-item-title">' + escapeHtml(item.title || item.text || 'Untitled') + '</span>' +
+              '<span class="related-item-score">' + Math.round((item.score || 0) * 100) + '%</span>' +
+            '</div>';
+          }).join('');
+        } catch (err) {
+          console.log('Related items not available:', err);
+          const container = document.getElementById('related-items-container');
+          if (container) container.innerHTML = '<div style="text-align:center;color:var(--text-secondary);padding:0.75rem;font-size:0.85rem;">Related items not available</div>';
+        }
+      }
+
+      function openRelatedItem(id, source) {
+        const table = source === 'posts' ? 'posts' : 'memory';
+        // Fetch the item and open it in modal
+        fetch(API_BASE + '/api/search/recent?table=' + table + '&limit=1&id=' + id)
+          .then(function(res) { return res.json(); })
+          .then(function(data) {
+            if (data.success && data.results && data.results.length > 0) {
+              const item = data.results[0];
+              const type = item.type || (table === 'memory' ? 'memory' : 'tweet');
+              openModal({ ...item, itemType: type }, type);
+            }
+          })
+          .catch(function(err) { console.log('Failed to open related item:', err); });
       }
 
       function closeModal() {

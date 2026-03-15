@@ -16,7 +16,6 @@ import proxyRoutes from './routes/proxy';
 import searchRoutes from './routes/search';
 import dashboardRoutes from './routes/dashboard';
 import mobileRoutes from './routes/mobile';
-import claudeSessionsRoutes from './routes/claude-sessions';
 import exportRoutes from './routes/export';
 import tasksRoutes from './routes/tasks';
 import adminRoutes from './routes/admin';
@@ -182,9 +181,6 @@ app.route('/api/webhook', webhookRoutes);
 
 // Mobile API routes (for iOS Shortcuts / automation)
 app.route('/api/mobile', mobileRoutes);
-
-// Claude Code sessions API
-app.route('/api/claude', claudeSessionsRoutes);
 
 // Admin routes (protected with X-Admin-Key header)
 app.route('/api/admin', adminRoutes);
