@@ -28,19 +28,9 @@ ENVIRONMENT = "development"
 JWT_SECRET = "change-this-in-production"
 API_VERSION = "v1"
 APP_URL = "https://my-memory.kureckamichal.workers.dev"
-# Note: AIRTABLE_API_KEY and AIRTABLE_BASE_ID are set as secrets via wrangler secret put
-AIRTABLE_PROFILES_TABLE = "Brand Profiles" # Table name for brand profiles
-AIRTABLE_WEBSITES_TABLE = "Content Generations" # Table name for content generations
-HTML_TO_IMAGE_WORKER_URL = "https://html-to-image-worker.kureckamichal.workers.dev/render"
-N8N_WEBHOOK_URL = "https://n8n.michalkurecka.cz/webhook/post-scraper"
-# Note: OPENROUTER_API_KEY and HTML_TO_IMAGE_WORKER_API_KEY are set as secrets via Cloudflare Dashboard
-# Do not add them here as environment variables or they will override the secrets
+# Note: OPENROUTER_API_KEY is set as a secret via Cloudflare Dashboard
 
 # Service Bindings - for Worker-to-Worker communication
-[[services]]
-binding = "HTML_TO_IMAGE_SERVICE"
-service = "html-to-image-worker"
-
 [[services]]
 binding = "TRANSCRIPT_SERVICE"
 service = "youtube-transcript-worker"

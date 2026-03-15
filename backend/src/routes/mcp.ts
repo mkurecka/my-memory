@@ -16,6 +16,7 @@ import { verifyJWT } from '../utils/jwt';
 import { generateEmbedding, vectorSearch } from '../utils/embeddings';
 import { generateId } from '../utils/id';
 import { saveWorkSession, searchWorkSessions, getWorkSession, listWorkProjects } from './mcp-sessions';
+import { analyzeMemory } from '../utils/memory-analyzer';
 
 const mcp = new Hono<{ Bindings: Env }>();
 
@@ -200,7 +201,7 @@ function handleListTools() {
     tools: [
       {
         name: 'search_memory',
-        description: 'Search through saved memories using semantic search. Use this to find relevant information from previously saved content including URLs, tweets, videos, and notes.',
+        description: 'Search through saved memories using semantic search. Supports filtering by date, category, priority, and tag.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -215,6 +216,19 @@ function handleListTools() {
             tag: {
               type: 'string',
               description: "Filter by tag: 'link', 'video', 'tweet', or custom tag"
+            },
+            category: {
+              type: 'string',
+              description: "Filter by AI-analyzed category (e.g. 'AI & Technology', 'Business', 'Marketing')"
+            },
+            priority: {
+              type: 'string',
+              enum: ['high', 'medium', 'low'],
+              description: 'Filter by action priority from AI analysis'
+            },
+            days_back: {
+              type: 'number',
+              description: 'Only search items saved within the last N days (e.g. 7 for last week)'
             }
           },
           required: ['query']
@@ -341,6 +355,42 @@ function handleListTools() {
           type: 'object',
           properties: {},
         },
+      },
+      {
+        name: 'find_related',
+        description: 'Find items related to a specific memory or post using vector similarity. Great for discovering connections in your knowledge base.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'string',
+              description: 'The ID of the memory/post to find related items for'
+            },
+            limit: {
+              type: 'number',
+              description: 'Maximum number of related items (default: 5)'
+            }
+          },
+          required: ['id']
+        }
+      },
+      {
+        name: 'get_insights',
+        description: 'Get aggregated insights from your knowledge base. Shows top categories, topics, high-priority items, and content with high potential.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            focus: {
+              type: 'string',
+              enum: ['overview', 'high_priority', 'topics', 'categories'],
+              description: 'What aspect to focus on (default: overview)'
+            },
+            days_back: {
+              type: 'number',
+              description: 'Only analyze items from the last N days'
+            }
+          }
+        }
       }
     ]
   };
@@ -380,6 +430,12 @@ async function handleToolCall(env: Env, userId: string, params: any): Promise<an
     case 'list_projects':
       return listWorkProjects(env);
 
+    case 'find_related':
+      return findRelated(env, args);
+
+    case 'get_insights':
+      return getInsights(env, args || {});
+
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
@@ -389,7 +445,7 @@ async function handleToolCall(env: Env, userId: string, params: any): Promise<an
  * Search memories using semantic search
  */
 async function searchMemory(env: Env, userId: string, args: any) {
-  const { query, limit = 10, tag } = args;
+  const { query, limit = 10, tag, category, priority, days_back } = args;
 
   // Generate embedding for query
   const queryEmbedding = await generateEmbedding(env, query);
@@ -454,9 +510,29 @@ async function searchMemory(env: Env, userId: string, args: any) {
     similarity: vr.score
   })).filter(r => r.id);
 
-  // Filter by tag if specified
+  // Apply filters
   if (tag) {
     results = results.filter(r => r.tag === tag);
+  }
+  if (category) {
+    results = results.filter(r => {
+      try {
+        const ctx = r.context_json ? JSON.parse(r.context_json) : {};
+        return ctx.analysis?.category === category;
+      } catch { return false; }
+    });
+  }
+  if (priority) {
+    results = results.filter(r => {
+      try {
+        const ctx = r.context_json ? JSON.parse(r.context_json) : {};
+        return ctx.analysis?.actionPriority === priority;
+      } catch { return false; }
+    });
+  }
+  if (days_back) {
+    const cutoff = Date.now() - (days_back * 86400000);
+    results = results.filter(r => r.created_at >= cutoff);
   }
 
   // Format results
@@ -471,6 +547,10 @@ async function searchMemory(env: Env, userId: string, args: any) {
     if (title) output += `\n   Title: ${title}`;
     output += `\n   Content: ${content.substring(0, 200)}${content.length > 200 ? '...' : ''}`;
     if (r.tag && r._source === 'memory') output += `\n   Tag: ${r.tag}`;
+    const analysis = context.analysis;
+    if (analysis?.category) output += `\n   Category: ${analysis.category}`;
+    if (analysis?.actionPriority) output += `\n   Priority: ${analysis.actionPriority}`;
+    if (analysis?.topics?.length) output += `\n   Topics: ${analysis.topics.slice(0, 3).join(', ')}`;
     output += `\n   Created: ${new Date(r.created_at).toLocaleString()}`;
     return output;
   });
@@ -518,10 +598,25 @@ async function saveMemory(env: Env, userId: string, args: any) {
     }]);
   }
 
+  // Trigger AI analysis (inline - no waitUntil available in MCP handler)
+  let analysisInfo = '';
+  try {
+    const analysis = await analyzeMemory(env, text, context || {});
+    if (analysis) {
+      const updatedContext = { ...(context || {}), analysis };
+      await env.DB.prepare('UPDATE memory SET context_json = ? WHERE id = ?')
+        .bind(JSON.stringify(updatedContext), memoryId)
+        .run();
+      analysisInfo = `\nCategory: ${analysis.category}\nPriority: ${analysis.actionPriority}\nTopics: ${analysis.topics?.slice(0, 3).join(', ') || 'none'}`;
+    }
+  } catch (err) {
+    console.error('[MCP] Analysis failed:', err);
+  }
+
   return {
     content: [{
       type: 'text',
-      text: `Memory saved successfully!\nID: ${memoryId}\nTag: ${tag || 'none'}`
+      text: `Memory saved successfully!\nID: ${memoryId}\nTag: ${tag || 'none'}${analysisInfo}`
     }]
   };
 }
@@ -635,6 +730,164 @@ async function deleteMemory(env: Env, userId: string, args: any) {
 
   return {
     content: [{ type: 'text', text: `Memory ${id} deleted successfully.` }]
+  };
+}
+
+/**
+ * Find items related to a specific memory or post using vector similarity
+ */
+async function findRelated(env: Env, args: any) {
+  const { id, limit = 5 } = args;
+
+  // Get embedding from memory or posts table
+  let embedding: string | null = null;
+
+  const memItem = await env.DB.prepare(
+    'SELECT embedding_vector FROM memory WHERE id = ?'
+  ).bind(id).first<{ embedding_vector: string }>();
+
+  if (memItem?.embedding_vector) {
+    embedding = memItem.embedding_vector;
+  } else {
+    const postItem = await env.DB.prepare(
+      'SELECT embedding_vector FROM posts WHERE id = ?'
+    ).bind(id).first<{ embedding_vector: string }>();
+    if (postItem?.embedding_vector) {
+      embedding = postItem.embedding_vector;
+    }
+  }
+
+  if (!embedding || !env.VECTORIZE) {
+    return {
+      content: [{ type: 'text', text: 'No embedding found for this item or Vectorize unavailable.' }]
+    };
+  }
+
+  const embeddingVector = JSON.parse(embedding);
+  const vectorResults = await env.VECTORIZE.query(embeddingVector, {
+    topK: limit + 1,
+    returnMetadata: 'all'
+  });
+
+  const filtered = vectorResults.matches
+    .filter(m => m.id !== id)
+    .slice(0, limit);
+
+  if (filtered.length === 0) {
+    return {
+      content: [{ type: 'text', text: 'No related items found.' }]
+    };
+  }
+
+  const results: string[] = [];
+  for (const match of filtered) {
+    const meta = match.metadata as any;
+    const table = meta?.table || 'memory';
+
+    let item: any = null;
+    if (table === 'posts') {
+      item = await env.DB.prepare(
+        'SELECT id, type, original_text, context_json, created_at FROM posts WHERE id = ?'
+      ).bind(match.id).first();
+    } else {
+      item = await env.DB.prepare(
+        'SELECT id, text, context_json, tag, created_at FROM memory WHERE id = ?'
+      ).bind(match.id).first();
+    }
+
+    if (item) {
+      const ctx = item.context_json ? JSON.parse(item.context_json) : {};
+      const title = ctx.title || (item.text || item.original_text || '').substring(0, 80);
+      const score = Math.round(match.score * 100);
+      const type = item.type || item.tag || 'memory';
+      results.push(`[${item.id}] ${score}% match | ${type} | ${title}`);
+    }
+  }
+
+  return {
+    content: [{
+      type: 'text',
+      text: `Related items for ${id}:\n\n${results.join('\n')}`
+    }]
+  };
+}
+
+/**
+ * Get aggregated insights from the knowledge base
+ */
+async function getInsights(env: Env, args: any) {
+  const { focus = 'overview', days_back } = args;
+
+  let dateFilter = '';
+  const bindings: any[] = [];
+  if (days_back) {
+    const cutoff = Date.now() - (days_back * 86400000);
+    dateFilter = ' AND created_at >= ?';
+    bindings.push(cutoff);
+  }
+
+  // Fetch analyzed items from both tables
+  const [memResults, postResults] = await Promise.all([
+    env.DB.prepare(
+      `SELECT id, text, context_json, tag, created_at FROM memory WHERE context_json LIKE '%"analysis":%'${dateFilter}`
+    ).bind(...bindings).all(),
+    env.DB.prepare(
+      `SELECT id, original_text as text, context_json, type as tag, created_at FROM posts WHERE context_json LIKE '%"analysis":%'${dateFilter}`
+    ).bind(...bindings).all()
+  ]);
+
+  const allItems = [...(memResults.results || []), ...(postResults.results || [])] as any[];
+
+  const categories: Record<string, number> = {};
+  const topics: Record<string, number> = {};
+  const highPriority: any[] = [];
+
+  for (const item of allItems) {
+    try {
+      const ctx = JSON.parse(item.context_json);
+      const a = ctx.analysis;
+      if (!a) continue;
+
+      if (a.category) categories[a.category] = (categories[a.category] || 0) + 1;
+      for (const t of a.topics || []) {
+        topics[t] = (topics[t] || 0) + 1;
+      }
+      if (a.actionPriority === 'high') {
+        highPriority.push({
+          id: item.id,
+          title: ctx.title || item.text?.substring(0, 80),
+          category: a.category,
+          topics: a.topics?.slice(0, 3)
+        });
+      }
+    } catch { /* skip */ }
+  }
+
+  const sortedCategories = Object.entries(categories).sort((a, b) => b[1] - a[1]);
+  const sortedTopics = Object.entries(topics).sort((a, b) => b[1] - a[1]).slice(0, 15);
+
+  let output = `Knowledge Base Insights${days_back ? ` (last ${days_back} days)` : ''}:\n`;
+  output += `Total analyzed: ${allItems.length}\n\n`;
+
+  if (focus === 'overview' || focus === 'categories') {
+    output += `Categories:\n${sortedCategories.map(([c, n]) => `  ${c}: ${n}`).join('\n')}\n\n`;
+  }
+
+  if (focus === 'overview' || focus === 'topics') {
+    output += `Top Topics:\n${sortedTopics.map(([t, n]) => `  ${t}: ${n}`).join('\n')}\n\n`;
+  }
+
+  if (focus === 'overview' || focus === 'high_priority') {
+    output += `High Priority (${highPriority.length}):\n`;
+    for (const hp of highPriority.slice(0, 10)) {
+      output += `  [${hp.id}] ${hp.title}`;
+      if (hp.category) output += ` (${hp.category})`;
+      output += '\n';
+    }
+  }
+
+  return {
+    content: [{ type: 'text', text: output }]
   };
 }
 

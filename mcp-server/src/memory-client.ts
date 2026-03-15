@@ -187,4 +187,72 @@ export class MemoryClient {
 
     return response.tags || [];
   }
+
+  // --- Work Sessions ---
+
+  /**
+   * Save a work session
+   */
+  async saveSession(args: {
+    project: string;
+    goal: string;
+    jira_ref?: string;
+    summary?: string;
+    changes?: string[];
+    errors?: string[];
+    open_items?: string[];
+    tags?: string[];
+    verified?: boolean;
+  }): Promise<any> {
+    return this.request("/api/work-sessions", {
+      method: "POST",
+      body: JSON.stringify(args),
+    });
+  }
+
+  /**
+   * Search work sessions using semantic search
+   */
+  async searchSessions(
+    query: string,
+    options?: { project?: string; limit?: number }
+  ): Promise<any> {
+    return this.request("/api/work-sessions/search", {
+      method: "POST",
+      body: JSON.stringify({ query, ...options }),
+    });
+  }
+
+  /**
+   * Get a specific work session by ID
+   */
+  async getSession(id: string): Promise<any> {
+    return this.request(`/api/work-sessions/${id}`);
+  }
+
+  /**
+   * List all projects with session counts
+   */
+  async listProjects(): Promise<any> {
+    return this.request("/api/work-sessions/projects");
+  }
+
+  // --- Discovery tools ---
+
+  /**
+   * Find items related to a given memory/post using vector similarity
+   */
+  async findRelated(id: string, limit?: number): Promise<any> {
+    const params = new URLSearchParams();
+    if (limit) params.set("limit", String(limit));
+    const qs = params.toString();
+    return this.request(`/api/search/related/${id}${qs ? `?${qs}` : ""}`);
+  }
+
+  /**
+   * Get all unique topics and categories from analyzed content
+   */
+  async getTopics(): Promise<any> {
+    return this.request("/api/search/topics");
+  }
 }

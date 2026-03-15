@@ -133,6 +133,120 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["id"],
         },
       },
+      {
+        name: "save_session",
+        description:
+          "Save a completed work session with goal, summary, changes, errors, and open items",
+        inputSchema: {
+          type: "object",
+          properties: {
+            project: {
+              type: "string",
+              description: "Project name/directory",
+            },
+            jira_ref: {
+              type: "string",
+              description: "Optional Jira/Linear issue reference",
+            },
+            goal: { type: "string", description: "Session goal" },
+            summary: {
+              type: "string",
+              description: "Summary of what was accomplished",
+            },
+            changes: {
+              type: "array",
+              items: { type: "string" },
+              description: "List of files changed",
+            },
+            errors: {
+              type: "array",
+              items: { type: "string" },
+              description: "Errors encountered",
+            },
+            open_items: {
+              type: "array",
+              items: { type: "string" },
+              description: "Open questions or unfinished items",
+            },
+            tags: {
+              type: "array",
+              items: { type: "string" },
+              description: "Tags for categorization",
+            },
+            verified: {
+              type: "boolean",
+              description: "Whether the work was verified/tested",
+            },
+          },
+          required: ["project", "goal"],
+        },
+      },
+      {
+        name: "search_sessions",
+        description: "Search across all work sessions using semantic search",
+        inputSchema: {
+          type: "object",
+          properties: {
+            query: { type: "string", description: "Search query" },
+            project: {
+              type: "string",
+              description: "Optional: filter by project",
+            },
+            limit: {
+              type: "number",
+              description: "Max results (default 10)",
+            },
+          },
+          required: ["query"],
+        },
+      },
+      {
+        name: "get_session",
+        description: "Retrieve a specific work session by ID",
+        inputSchema: {
+          type: "object",
+          properties: {
+            id: { type: "string", description: "Session ID" },
+          },
+          required: ["id"],
+        },
+      },
+      {
+        name: "list_projects",
+        description: "List all projects with session counts",
+        inputSchema: {
+          type: "object",
+          properties: {},
+        },
+      },
+      {
+        name: "find_related",
+        description:
+          "Find items related to a given memory or post using vector similarity. Returns semantically similar content.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            id: {
+              type: "string",
+              description: "The memory or post ID to find related items for",
+            },
+            limit: {
+              type: "number",
+              description: "Maximum number of related items to return (default: 5)",
+            },
+          },
+          required: ["id"],
+        },
+      },
+      {
+        name: "get_topics",
+        description:
+          "Get all unique topics and categories from analyzed content. Useful for discovering what themes are in your memory.",
+        inputSchema: {
+          type: "object",
+          properties: {},
+        },
+      },
     ],
   };
 });
@@ -256,6 +370,70 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               type: "text",
               text: `Memory ${id} deleted successfully.`,
             },
+          ],
+        };
+      }
+
+      case "save_session": {
+        const result = await client.saveSession(args as any);
+        return {
+          content: [
+            { type: "text", text: JSON.stringify(result, null, 2) },
+          ],
+        };
+      }
+
+      case "search_sessions": {
+        const { query, project, limit } = args as {
+          query: string;
+          project?: string;
+          limit?: number;
+        };
+        const result = await client.searchSessions(query, {
+          project,
+          limit,
+        });
+        return {
+          content: [
+            { type: "text", text: JSON.stringify(result, null, 2) },
+          ],
+        };
+      }
+
+      case "get_session": {
+        const { id } = args as { id: string };
+        const result = await client.getSession(id);
+        return {
+          content: [
+            { type: "text", text: JSON.stringify(result, null, 2) },
+          ],
+        };
+      }
+
+      case "list_projects": {
+        const result = await client.listProjects();
+        return {
+          content: [
+            { type: "text", text: JSON.stringify(result, null, 2) },
+          ],
+        };
+      }
+
+      case "find_related": {
+        const { id, limit } = args as { id: string; limit?: number };
+        const result = await client.findRelated(id, limit);
+        return {
+          content: [
+            { type: "text", text: JSON.stringify(result, null, 2) },
+          ],
+        };
+      }
+
+      case "get_topics": {
+        const result = await client.getTopics();
+        return {
+          content: [
+            { type: "text", text: JSON.stringify(result, null, 2) },
           ],
         };
       }
