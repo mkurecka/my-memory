@@ -5,7 +5,6 @@ import { unifiedMemoriesPage } from '../templates/pages/memories-unified';
 import { addContentPage } from '../templates/pages/add-content';
 import { workSessionsPage } from '../templates/pages/work-sessions';
 import { settingsPage } from '../templates/pages/settings';
-import { tasksPage } from '../templates/pages/tasks';
 import { chatPage } from '../templates/pages/chat';
 import { insightsPage } from '../templates/pages/insights';
 
@@ -157,21 +156,6 @@ router.get('/settings', async (c) => {
   } catch (error: any) {
     console.error('Settings page error:', error);
     return c.html(errorPage('Settings Error', error.message), 500);
-  }
-});
-
-/**
- * GET /dashboard/tasks
- * Tasks history page - view and manage tasks with conversation threading
- */
-router.get('/tasks', async (c) => {
-  try {
-    const apiBase = c.env.APP_URL;
-    const html = tasksPage({ apiBase });
-    return c.html(html);
-  } catch (error: any) {
-    console.error('Tasks page error:', error);
-    return c.html(errorPage('Tasks Error', error.message), 500);
   }
 });
 

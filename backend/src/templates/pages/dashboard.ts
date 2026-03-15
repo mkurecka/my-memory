@@ -38,14 +38,6 @@ export function dashboardPage({ stats, apiBase }: DashboardProps): string {
       count: totalMemories,
       link: '/dashboard/memories',
       color: '#8b5cf6'
-    },
-    {
-      title: 'AI Content',
-      description: 'AI-generated and processed content',
-      icon: '✨',
-      count: stats.posts.total - stats.posts.tweets - stats.posts.videos,
-      link: '/dashboard/ai-content',
-      color: '#10b981'
     }
   ];
 
@@ -68,18 +60,18 @@ export function dashboardPage({ stats, apiBase }: DashboardProps): string {
             <p>Save text content</p>
           </div>
         </a>
-        <a href="/dashboard/ai-images" class="action-card action-secondary">
-          <div class="action-icon">🎨</div>
+        <a href="/dashboard/chat" class="action-card action-secondary">
+          <div class="action-icon">💬</div>
           <div class="action-content">
-            <h3>Generate Image</h3>
-            <p>Create AI images</p>
+            <h3>Chat</h3>
+            <p>Query your memories</p>
           </div>
         </a>
-        <a href="/dashboard/generate-carousel" class="action-card action-accent">
-          <div class="action-icon">📱</div>
+        <a href="/dashboard/insights" class="action-card action-accent">
+          <div class="action-icon">💡</div>
           <div class="action-content">
-            <h3>Create Carousel</h3>
-            <p>Instagram carousels</p>
+            <h3>Insights</h3>
+            <p>AI-powered analysis</p>
           </div>
         </a>
       </div>
@@ -96,8 +88,6 @@ export function dashboardPage({ stats, apiBase }: DashboardProps): string {
             <option value="memory">Memories</option>
             <option value="tweet">Tweets</option>
             <option value="youtube_video">Videos</option>
-            <option value="ai_content">AI Content</option>
-            <option value="ai_image">AI Images</option>
           </select>
           <select id="search-date">
             <option value="">All Time</option>

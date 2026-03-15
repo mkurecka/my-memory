@@ -15,7 +15,6 @@ import searchRoutes from './routes/search';
 import dashboardRoutes from './routes/dashboard';
 import mobileRoutes from './routes/mobile';
 import exportRoutes from './routes/export';
-import tasksRoutes from './routes/tasks';
 import adminRoutes from './routes/admin';
 import chatRoutes from './routes/chat';
 import mcpRoutes from './routes/mcp';
@@ -165,8 +164,6 @@ app.route('/api/settings', settingsRoutes);
 app.route('/api/proxy', proxyRoutes);
 app.route('/api/search', searchRoutes);
 app.route('/api/export', exportRoutes);
-app.route('/api/tasks', tasksRoutes);
-
 // Webhook routes (v1 for backward compatibility)
 app.route('/api/v1/webhook', webhookRoutes);
 app.route('/api/webhook', webhookRoutes);
