@@ -57,7 +57,7 @@ process.post('/text', authMiddleware, async (c) => {
     const prompt = buildPrompt(mode, text, language, comment, actionParams, settings);
 
     // Get model from settings or use default
-    const model = (settings as any)?.models?.contentModel || 'anthropic/claude-3.5-sonnet';
+    const model = (settings as any)?.models?.contentModel || 'anthropic/claude-sonnet-4.6';
 
     // Call OpenRouter API
     const startTime = Date.now();
