@@ -986,4 +986,78 @@ memory.post('/from-media', authMiddleware, async (c) => {
   }
 });
 
+// POST /api/memory/decay - Prune stale memories
+memory.post('/decay', authMiddleware, async (c) => {
+  try {
+    const userId = c.get('userId') as string;
+    const { dry_run = true } = await c.req.json().catch(() => ({ dry_run: true }));
+
+    const now = Date.now();
+    const SIXTY_DAYS = 60 * 24 * 60 * 60 * 1000;
+    const NINETY_DAYS = 90 * 24 * 60 * 60 * 1000;
+
+    // Protected tags — never auto-prune
+    const PROTECTED_TAGS = ['reference', 'link', 'video'];
+
+    // Soft prune candidates: no access in 60+ days, not protected, not high priority
+    const softCandidates = await c.env.DB.prepare(`
+      SELECT id, text, tag, priority, created_at, last_accessed_at
+      FROM memory
+      WHERE user_id = ?
+        AND ((last_accessed_at IS NULL AND created_at < ?) OR (last_accessed_at IS NOT NULL AND last_accessed_at < ?))
+        AND (tag IS NULL OR tag NOT IN ('reference', 'link', 'video'))
+        AND (priority IS NULL OR priority != 'high')
+    `).bind(userId, now - SIXTY_DAYS, now - SIXTY_DAYS).all();
+
+    const softIds = (softCandidates.results || []).map((r: any) => r.id);
+
+    // Hard prune candidates: no access in 90+ days
+    const hardCandidates = await c.env.DB.prepare(`
+      SELECT id, text, tag, priority, created_at, last_accessed_at
+      FROM memory
+      WHERE user_id = ?
+        AND ((last_accessed_at IS NULL AND created_at < ?) OR (last_accessed_at IS NOT NULL AND last_accessed_at < ?))
+        AND (tag IS NULL OR tag NOT IN ('reference', 'link', 'video'))
+        AND (priority IS NULL OR priority != 'high')
+    `).bind(userId, now - NINETY_DAYS, now - NINETY_DAYS).all();
+
+    const hardIds = (hardCandidates.results || []).map((r: any) => r.id);
+
+    if (dry_run) {
+      return c.json({
+        success: true,
+        dry_run: true,
+        soft_prune: { count: softIds.length, samples: (softCandidates.results || []).slice(0, 5).map((r: any) => ({ id: r.id, text: (r.text || '').substring(0, 60), tag: r.tag, age_days: Math.floor((now - r.created_at) / 86400000) })) },
+        hard_prune: { count: hardIds.length, samples: (hardCandidates.results || []).slice(0, 5).map((r: any) => ({ id: r.id, text: (r.text || '').substring(0, 60), tag: r.tag, age_days: Math.floor((now - r.created_at) / 86400000) })) },
+        protected_tags: PROTECTED_TAGS,
+      });
+    }
+
+    // Execute soft prune — remove vectors only (keep in DB)
+    let softPruned = 0;
+    for (const id of softIds) {
+      if (!hardIds.includes(id)) {
+        try { await deleteVector(c.env, id); softPruned++; } catch {}
+      }
+    }
+
+    // Execute hard prune — delete from DB + Vectorize
+    let hardPruned = 0;
+    for (const id of hardIds) {
+      try {
+        await deleteVector(c.env, id);
+        await c.env.DB.prepare('DELETE FROM memory WHERE id = ?').bind(id).run();
+        hardPruned++;
+      } catch {}
+    }
+
+    console.log(`[Decay] user=${userId} soft=${softPruned} hard=${hardPruned}`);
+
+    return c.json({ success: true, dry_run: false, soft_pruned: softPruned, hard_pruned: hardPruned });
+  } catch (error: any) {
+    console.error('[Decay] Error:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
 export default memory;

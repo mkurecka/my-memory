@@ -515,6 +515,11 @@ async function searchMemory(env: Env, userId: string, args: any) {
       `SELECT id, text, context_json, tag, created_at FROM memory WHERE id IN (${placeholders})`
     ).bind(...memoryIds).all();
     allRecords.push(...(dbResults.results || []).map((r: any) => ({ ...r, _source: 'memory' })));
+
+    // Track access for decay
+    env.DB.prepare(
+      `UPDATE memory SET last_accessed_at = ? WHERE id IN (${placeholders})`
+    ).bind(Date.now(), ...memoryIds).run().catch(() => {});
   }
 
   if (postIds.length > 0) {

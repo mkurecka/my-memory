@@ -102,6 +102,11 @@ router.post('/', async (c) => {
               });
             }
           }
+
+          // Track access for decay
+          c.env.DB.prepare(
+            `UPDATE memory SET last_accessed_at = ? WHERE id IN (${placeholders})`
+          ).bind(Date.now(), ...memIds).run().catch(() => {});
         }
       }
 

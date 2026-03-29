@@ -55,6 +55,15 @@ search.post('/semantic', authMiddleware, async (c) => {
 
         const dbResults = await c.env.DB.prepare(sql).bind(...ids).all();
 
+        // Track access for memory decay
+        if (table === 'memory' && ids.length > 0) {
+          c.executionCtx.waitUntil(
+            c.env.DB.prepare(
+              `UPDATE memory SET last_accessed_at = ? WHERE id IN (${placeholders})`
+            ).bind(Date.now(), ...ids).run().catch(() => {})
+          );
+        }
+
         // Merge with similarity scores
         const resultsMap = new Map((dbResults.results || []).map((r: any) => [r.id, r]));
         const results = vectorResults.map(vr => ({
