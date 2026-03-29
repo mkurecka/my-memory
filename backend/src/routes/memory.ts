@@ -7,6 +7,7 @@ import { createAuthMiddleware } from '../utils/auth-middleware';
 import { simpleHash } from '../utils/helpers';
 import { extractYouTubeContent, extractTwitterContent, extractWebpageContent } from '../utils/content-extraction';
 import { analyzeMemory, type MemoryAnalysis } from '../utils/memory-analyzer';
+import { extractFromImage, extractFromVideo, type MediaExtraction } from '../utils/media-extractor';
 
 const memory = new Hono<{ Bindings: Env }>();
 const authMiddleware = createAuthMiddleware();
@@ -875,5 +876,114 @@ async function analyzeMemoryAndUpdate(
     console.error('[Memory] Background analysis error:', error.message);
   }
 }
+
+// POST /api/memory/from-media - Create memory from image or video
+memory.post('/from-media', authMiddleware, async (c) => {
+  try {
+    const userId = c.get('userId');
+    const { url, type = 'image', note, tag } = await c.req.json();
+
+    if (!url) {
+      return c.json({ success: false, error: 'URL is required' }, 400);
+    }
+
+    console.log(`[Memory] Processing ${type} from:`, url);
+
+    // Extract content using vision AI
+    let extraction: MediaExtraction | null = null;
+    if (type === 'video') {
+      extraction = await extractFromVideo(url, c.env);
+    } else {
+      extraction = await extractFromImage(url, c.env);
+    }
+
+    if (!extraction) {
+      return c.json({ success: false, error: 'Failed to extract content from media' }, 500);
+    }
+
+    // Build memory text from extraction
+    const parts: string[] = [];
+    if (extraction.text) parts.push(extraction.text);
+    if (extraction.description) parts.push(extraction.description);
+    if (note) parts.push(`Note: ${note}`);
+    const memoryText = parts.join('\n\n').substring(0, 10000);
+
+    if (!memoryText.trim()) {
+      return c.json({ success: false, error: 'No content could be extracted from the media' }, 400);
+    }
+
+    // Build context
+    const contextData: Record<string, any> = {
+      media_url: url,
+      media_type: type,
+      extracted_type: extraction.mediaType,
+      description: extraction.description,
+      topics: extraction.topics,
+      data: extraction.data,
+    };
+    if (note) contextData.user_note = note;
+    if (extraction.text) contextData.extracted_text = extraction.text.substring(0, 5000);
+
+    const memoryId = generateId();
+    const now = Date.now();
+    const finalTag = tag || (type === 'video' ? 'video' : 'image');
+
+    // Generate embedding
+    let embedding: number[] | null = null;
+    if (c.env.AI) {
+      embedding = await generateEmbedding(c.env, memoryText);
+    }
+
+    // Save to database
+    await c.env.DB
+      .prepare(`
+        INSERT INTO memory (id, user_id, text, context_json, tag, priority, embedding_vector, embedding_model, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      .bind(
+        memoryId,
+        userId,
+        memoryText,
+        JSON.stringify(contextData),
+        finalTag,
+        'medium',
+        embedding ? JSON.stringify(embedding) : null,
+        embedding ? EMBEDDING_MODEL : null,
+        now
+      )
+      .run();
+
+    // Insert into Vectorize
+    if (embedding && c.env.VECTORIZE) {
+      await insertVector(c.env, memoryId, embedding, {
+        user_id: userId,
+        table: 'memory',
+        type: finalTag
+      });
+    }
+
+    // Trigger AI analysis in background
+    c.executionCtx.waitUntil(
+      analyzeMemoryAndUpdate(c.env, memoryId, memoryText, contextData)
+    );
+
+    console.log(`[Memory] Media memory created: ${memoryId} (${extraction.mediaType})`);
+
+    return c.json({
+      success: true,
+      memoryId,
+      extraction: {
+        type: extraction.mediaType,
+        description: extraction.description,
+        topics: extraction.topics,
+        textLength: extraction.text.length,
+      },
+      message: `${type} content extracted and saved as memory`,
+    }, 201);
+  } catch (error: any) {
+    console.error('[Memory] from-media error:', error);
+    return c.json({ success: false, error: error.message || 'Failed to process media' }, 500);
+  }
+});
 
 export default memory;

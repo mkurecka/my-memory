@@ -257,6 +257,33 @@ function handleListTools() {
         }
       },
       {
+        name: 'save_media_memory',
+        description: 'Save an image or video as a memory. Extracts text (OCR), descriptions, topics, and data from the media using vision AI, then saves as a searchable memory.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            url: {
+              type: 'string',
+              description: 'URL of the image or video to process'
+            },
+            type: {
+              type: 'string',
+              enum: ['image', 'video'],
+              description: "Type of media: 'image' or 'video' (default: 'image')"
+            },
+            note: {
+              type: 'string',
+              description: 'Optional note to attach to the memory for additional context'
+            },
+            tag: {
+              type: 'string',
+              description: "Optional tag to categorize (default: 'image' or 'video')"
+            }
+          },
+          required: ['url']
+        }
+      },
+      {
         name: 'list_memories',
         description: 'List recent memories with optional filtering by tag or type.',
         inputSchema: {
@@ -417,6 +444,9 @@ async function handleToolCall(env: Env, userId: string, params: any): Promise<an
 
     case 'delete_memory':
       return deleteMemory(env, userId, args);
+
+    case 'save_media_memory':
+      return saveMediaMemory(env, userId, args);
 
     case 'save_session':
       return saveWorkSession(env, args);
@@ -617,6 +647,116 @@ async function saveMemory(env: Env, userId: string, args: any) {
     content: [{
       type: 'text',
       text: `Memory saved successfully!\nID: ${memoryId}\nTag: ${tag || 'none'}${analysisInfo}`
+    }]
+  };
+}
+
+/**
+ * Save media (image/video) as memory with AI extraction
+ */
+async function saveMediaMemory(env: Env, userId: string, args: any) {
+  const { url, type = 'image', note, tag } = args;
+
+  if (!url) {
+    return {
+      content: [{ type: 'text', text: 'Error: URL is required' }],
+      isError: true
+    };
+  }
+
+  // Import and use media extractor
+  const { extractFromImage, extractFromVideo } = await import('../utils/media-extractor');
+
+  let extraction;
+  if (type === 'video') {
+    extraction = await extractFromVideo(url, env);
+  } else {
+    extraction = await extractFromImage(url, env);
+  }
+
+  if (!extraction) {
+    return {
+      content: [{ type: 'text', text: 'Error: Failed to extract content from media' }],
+      isError: true
+    };
+  }
+
+  // Build memory text
+  const parts: string[] = [];
+  if (extraction.text) parts.push(extraction.text);
+  if (extraction.description) parts.push(extraction.description);
+  if (note) parts.push(`Note: ${note}`);
+  const memoryText = parts.join('\n\n').substring(0, 10000);
+
+  if (!memoryText.trim()) {
+    return {
+      content: [{ type: 'text', text: 'Error: No content could be extracted from the media' }],
+      isError: true
+    };
+  }
+
+  const contextData: Record<string, any> = {
+    media_url: url,
+    media_type: type,
+    extracted_type: extraction.mediaType,
+    description: extraction.description,
+    topics: extraction.topics,
+    data: extraction.data,
+  };
+  if (note) contextData.user_note = note;
+  if (extraction.text) contextData.extracted_text = extraction.text.substring(0, 5000);
+
+  const memoryId = generateId('mem');
+  const now = Date.now();
+  const finalTag = tag || (type === 'video' ? 'video' : 'image');
+
+  // Generate embedding
+  const embedding = await generateEmbedding(env, memoryText);
+
+  // Save to DB
+  await env.DB.prepare(`
+    INSERT INTO memory (id, user_id, text, context_json, tag, priority, embedding_vector, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    memoryId,
+    userId,
+    memoryText,
+    JSON.stringify(contextData),
+    finalTag,
+    'medium',
+    embedding ? JSON.stringify(embedding) : null,
+    now
+  ).run();
+
+  // Insert into Vectorize
+  if (embedding && env.VECTORIZE) {
+    await env.VECTORIZE.upsert([{
+      id: memoryId,
+      values: embedding,
+      metadata: { user_id: userId, table: 'memory', type: finalTag }
+    }]);
+  }
+
+  // Run analysis
+  let analysisInfo = '';
+  try {
+    const { analyzeMemory } = await import('../utils/memory-analyzer');
+    const analysis = await analyzeMemory(env, memoryText, contextData);
+    if (analysis) {
+      const updatedContext = { ...contextData, analysis };
+      await env.DB.prepare('UPDATE memory SET context_json = ? WHERE id = ?')
+        .bind(JSON.stringify(updatedContext), memoryId)
+        .run();
+      analysisInfo = `\nCategory: ${analysis.category}\nTopics: ${analysis.topics?.slice(0, 5).join(', ') || 'none'}`;
+    }
+  } catch (err) {
+    console.error('[MCP] Media analysis failed:', err);
+  }
+
+  return {
+    content: [{
+      type: 'text',
+      text: `Media memory saved!\nID: ${memoryId}\nType: ${extraction.mediaType}\nDescription: ${extraction.description.substring(0, 200)}\nExtracted text: ${extraction.text ? extraction.text.substring(0, 200) + '...' : 'none'}\nTopics: ${extraction.topics.join(', ') || 'none'}${analysisInfo}`
     }]
   };
 }
