@@ -25,14 +25,20 @@ jobs:
     - name: Install backend dependencies
       run: cd backend && npm install
 
-    - name: Run template tests
-      run: npm run test:templates
+    - name: Install MCP dependencies
+      run: cd mcp-server && npm install
 
     - name: Run integration tests
       run: npm run test:integration
 
+    - name: Run Twitter integration tests
+      run: npm run test:twitter
+
     - name: Run backend API tests
       run: npm run test:backend
+
+    - name: Build MCP server
+      run: cd mcp-server && npm run build
 
     - name: Test summary
       if: always()

@@ -156,26 +156,20 @@ tests.test('GET /api/webhook/health returns healthy', async () => {
   tests.assert(res.data.success, 'Should be successful');
 });
 
-// Test 3: Visual content webhook
-tests.test('POST /api/v1/webhook with visual content event', async () => {
+// Test 3: Memory webhook
+tests.test('POST /api/v1/webhook with memory event', async () => {
   const res = await tests.fetch('/api/v1/webhook', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: {
-      event: 'onVisualContentCreated',
+      event: 'saveToMemory',
       data: {
-        text: 'Test text',
-        imageTypes: ['quote_card'],
-        images: [{
-          type: 'quote_card',
-          url: 'data:image/png;base64,test',
-          width: 1200,
-          height: 630
-        }]
+        text: 'Test memory webhook',
+        context: { source: 'api-test' }
       }
     }
   });
-  tests.assertEqual(res.status, 200, 'Should accept visual content webhook');
+  tests.assertEqual(res.status, 200, 'Should accept memory webhook');
 });
 
 // Test 4: CORS headers

@@ -1,6 +1,6 @@
-/* global settingsManager, apiClient, generateTemplate, getImageSpec */
-// Import settings manager, API client, and template generators
-importScripts('settings-manager.js', 'api-client.js', 'template-generators.js');
+/* global settingsManager, apiClient */
+// Import settings manager and API client
+importScripts('settings-manager.js', 'api-client.js');
 
 // Initialize settings on extension load
 let settingsLoaded = false;
@@ -527,13 +527,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "saveToMemory") {
     (async () => {
       try {
-        // Send to backend via webhook
-        await sendWebhookNotification('saveToMemory', {
-          text: request.data.text,
-          context: request.data.context
+        const result = await apiClient.ingestMemory({
+          sourceType: request.data.sourceType || inferSourceType(request.data.text, request.data.context),
+          content: request.data.text,
+          context: request.data.context || {},
+          metadata: {
+            savedAt: request.data.savedAt,
+            source: 'extension'
+          },
+          tag: request.data.tag || request.data.context?.tag,
+          priority: request.data.priority || request.data.context?.priority
         });
 
-        sendResponse({ success: true, message: 'Saved to backend' });
+        sendResponse({ success: true, message: 'Saved to memory', result });
       } catch (error) {
         console.error('[Extension] Failed to save to memory:', error);
         sendResponse({ success: false, error: error.message || 'Failed to save' });
@@ -699,339 +705,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
-  // Create visual content
-  if (request.action === "createVisualContent") {
-    (async () => {
-      try {
-        const { text, imageTypes, carouselMode, generateCaption, context } = request;
-
-        console.log('[Visual Content] Creating visual content:', {
-          imageTypes,
-          carouselMode,
-          generateCaption,
-          text: text?.substring(0, 50) + '...'
-        });
-
-        // Get visual content settings
-        const visualSettings = settingsManager.settings?.visualContent || {};
-        const branding = visualSettings.branding || {};
-
-        console.log('[Visual Content] Settings:', {
-          hasVisualSettings: !!settingsManager.settings?.visualContent,
-          endpoint: visualSettings.htmlToImageWorker?.endpoint,
-          branding: Object.keys(branding)
-        });
-
-        const images = [];
-
-        // Generate each image type
-        for (const imageType of imageTypes) {
-          console.log(`[Visual Content] Processing imageType: ${imageType}`);
-          try {
-            // Generate HTML template
-            console.log(`[Visual Content] Generating template for: ${imageType}`);
-            const html = generateTemplate(imageType, text, {
-              branding,
-              ...visualSettings.imageTypes?.[imageType]?.defaultOptions
-            });
-            console.log(`[Visual Content] Template generated, length: ${html?.length || 0}`);
-
-            // Get image specifications
-            const spec = getImageSpec(imageType);
-            console.log(`[Visual Content] Spec for ${imageType}:`, spec);
-
-            // Call html-to-image-worker
-            const htmlToImageEndpoint = visualSettings.htmlToImageWorker?.endpoint ||
-              'https://html-to-image.workers.dev/convert';
-
-            const imageResponse = await fetch(htmlToImageEndpoint, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                html,
-                width: spec.width,
-                height: spec.height,
-                format: 'png'
-              })
-            });
-
-            if (!imageResponse.ok) {
-              console.error(`Failed to generate ${imageType}:`, imageResponse.statusText);
-              continue;
-            }
-
-            // Worker returns JSON with R2 URL, not binary image
-            const responseData = await imageResponse.json();
-            console.log(`[Visual Content] Response for ${imageType}:`, JSON.stringify(responseData));
-
-            // Handle both direct response and proxy-wrapped response
-            // Proxy returns: {success, data: {success, data: {url}}}
-            // Direct returns: {success, data: {url}}
-            let imageUrl;
-            if (responseData.data?.data?.url) {
-              // Proxy-wrapped response
-              imageUrl = responseData.data.data.url;
-            } else if (responseData.data?.url) {
-              // Direct response
-              imageUrl = responseData.data.url;
-            } else {
-              console.error(`Invalid response for ${imageType}:`, responseData);
-              continue;
-            }
-
-            images.push({
-              type: imageType,
-              url: imageUrl,
-              width: spec.width,
-              height: spec.height,
-              filename: `${imageType}.png`
-            });
-
-          } catch (error) {
-            console.error(`Error generating ${imageType}:`, error);
-          }
-        }
-
-        if (images.length === 0) {
-          sendResponse({
-            success: false,
-            error: 'Failed to generate any images'
-          });
-          return;
-        }
-
-        // Generate caption if requested (use backend proxy)
-        let caption = null;
-        if (generateCaption && visualSettings.captionGeneration?.enabled) {
-          try {
-            const captionModel = visualSettings.captionGeneration?.model || 'openai/gpt-4o-mini';
-            const captionPrompt = `Generate a compelling social media caption for this visual content:
-
-Text: "${text}"
-
-Image types: ${imageTypes.join(', ')}
-
-Create a short, engaging caption (1-2 sentences) with relevant emojis.
-
-Return ONLY the caption text, nothing else.`;
-
-            // Use backend proxy instead of direct OpenRouter call
-            const backendUrl = settingsManager.settings?.backend?.baseUrl ||
-              'https://my-memory.kureckamichal.workers.dev';
-
-            const captionResponse = await fetch(`${backendUrl}/api/proxy/openrouter`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                model: captionModel,
-                messages: [{
-                  role: 'user',
-                  content: captionPrompt
-                }]
-              })
-            });
-
-            if (captionResponse.ok) {
-              const captionData = await captionResponse.json();
-              // Backend proxy wraps response in {success, data}
-              const openRouterData = captionData.data || captionData;
-              caption = openRouterData.choices?.[0]?.message?.content?.trim();
-            }
-          } catch (error) {
-            console.error('Caption generation error:', error);
-          }
-        }
-
-        // Send directly to backend via webhook
-        // No local storage needed
-        await sendWebhookNotification('onVisualContentCreated', {
-          event: 'visual_content_created',
-          data: {
-            text,
-            imageTypes,
-            images,
-            caption,
-            carouselMode
-          }
-        });
-
-        sendResponse({
-          success: true,
-          images,
-          caption,
-          message: 'Visual content created successfully'
-        });
-
-      } catch (error) {
-        console.error('Visual content creation error:', error);
-        sendResponse({
-          success: false,
-          error: error.message || 'Failed to create visual content'
-        });
-      }
-    })();
-    return true;
-  }
-
-  // Suggest image prompt from text
-  if (request.action === "suggestImagePrompt") {
-    (async () => {
-      try {
-        const { text } = request;
-
-        const backendUrl = settingsManager.settings?.backend?.baseUrl ||
-          'https://my-memory.kureckamichal.workers.dev';
-
-        const response = await fetch(`${backendUrl}/api/proxy/openrouter`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'openai/gpt-4o-mini',
-            messages: [{
-              role: 'user',
-              content: `Based on the following text, generate a detailed image prompt suitable for AI image generation (DALL-E). The prompt should be vivid, descriptive, and capture the essence of the text visually. Return ONLY the image prompt, nothing else.
-
-Text:
-"${text.substring(0, 1000)}"
-
-Generate a prompt that describes a compelling visual representation of this content.`
-            }]
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error(`Backend returned ${response.status}`);
-        }
-
-        const data = await response.json();
-        const openRouterData = data.data || data;
-        const prompt = openRouterData.choices?.[0]?.message?.content?.trim();
-
-        sendResponse({
-          success: true,
-          prompt
-        });
-
-      } catch (error) {
-        console.error('Suggest prompt error:', error);
-        sendResponse({
-          success: false,
-          error: error.message || 'Failed to suggest prompt'
-        });
-      }
-    })();
-    return true;
-  }
-
-  // Generate AI image via backend proxy (OpenRouter multimodal models)
-  if (request.action === "generateAIImage") {
-    (async () => {
-      try {
-        const { model, prompt, style, aspectRatio, generateCaption, originalText, context } = request;
-
-        console.log('[AI Image] Generating image:', { model, prompt, style, aspectRatio });
-
-        const backendUrl = settingsManager.settings?.backend?.baseUrl ||
-          'https://my-memory.kureckamichal.workers.dev';
-
-        // Call backend image generation proxy
-        const response = await fetch(`${backendUrl}/api/proxy/image`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: model || 'google/gemini-2.5-flash-image',
-            prompt,
-            style,
-            aspectRatio
-          })
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Image generation failed: ${errorText}`);
-        }
-
-        const data = await response.json();
-        const imageUrl = data.data?.url || data.url;
-
-        if (!imageUrl) {
-          throw new Error('No image URL in response');
-        }
-
-        // Generate caption if requested
-        let caption = null;
-        if (generateCaption) {
-          try {
-            const captionResponse = await fetch(`${backendUrl}/api/proxy/openrouter`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                model: 'openai/gpt-4o-mini',
-                messages: [{
-                  role: 'user',
-                  content: `Generate a compelling social media caption for an AI-generated image.
-
-Original text that inspired the image: "${originalText?.substring(0, 500) || ''}"
-
-Image prompt used: "${prompt}"
-
-Create a short, engaging caption (1-2 sentences) with relevant emojis. Return ONLY the caption text.`
-                }]
-              })
-            });
-
-            if (captionResponse.ok) {
-              const captionData = await captionResponse.json();
-              const openRouterData = captionData.data || captionData;
-              caption = openRouterData.choices?.[0]?.message?.content?.trim();
-            }
-          } catch (captionError) {
-            console.error('Caption generation error:', captionError);
-          }
-        }
-
-        // Send webhook notification with model info
-        await sendWebhookNotification('onAIImageCreated', {
-          event: 'ai_image_created',
-          data: {
-            prompt,
-            style,
-            aspectRatio,
-            model: model || 'google/gemini-2.5-flash-image',
-            imageUrl,
-            caption,
-            originalText: originalText?.substring(0, 200)
-          }
-        });
-
-        sendResponse({
-          success: true,
-          imageUrl,
-          caption,
-          message: 'AI image generated successfully'
-        });
-
-      } catch (error) {
-        console.error('AI image generation error:', error);
-        sendResponse({
-          success: false,
-          error: error.message || 'Failed to generate AI image'
-        });
-      }
-    })();
-    return true;
-  }
 });
+
+function inferSourceType(text, context = {}) {
+  if (context.type === 'image') return 'image';
+  if (/^https?:\/\/[^\s]+$/.test((text || '').trim())) return 'url';
+  return 'text';
+}
 
 // Webhook notification function
 async function sendWebhookNotification(eventType, payload) {

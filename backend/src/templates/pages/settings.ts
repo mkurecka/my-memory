@@ -169,7 +169,6 @@ export function settingsPage({ apiBase, settings, webhooksCount = 0 }: SettingsP
               <option value="onSaveYouTubeVideo">Save Video</option>
               <option value="saveToMemory">Save Memory</option>
               <option value="processText">Process Text</option>
-              <option value="onCreateVisualContent">Visual Content</option>
             </select>
             <select id="webhook-sort">
               <option value="newest">Newest first</option>
@@ -1226,4 +1225,3 @@ function getWebhooksScript(): string {
     }
   `;
 }
-

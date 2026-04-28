@@ -4,8 +4,7 @@
   "description": "My Memory - Chrome Extension + Cloudflare Workers Backend",
   "scripts": {
     "test": "npm run test:extension && npm run test:backend",
-    "test:extension": "npm run test:templates && npm run test:integration && npm run test:twitter",
-    "test:templates": "node extension/tests/template-tests.js",
+    "test:extension": "npm run test:integration && npm run test:twitter",
     "test:integration": "node extension/tests/integration-tests.js",
     "test:twitter": "node extension/tests/twitter-integration-test.js",
     "test:backend": "node backend/tests/api-tests.js",
@@ -26,7 +25,7 @@
     "text-processor",
     "cloudflare-workers",
     "ai",
-    "visual-content"
+    "memory"
   ],
   "author": "Michal Kurecka",
   "license": "MIT",

@@ -13,15 +13,12 @@ export interface Env {
   AIRTABLE_WEBSITES_TABLE?: string;
   // Proxy settings
   OPENROUTER_API_KEY?: string;
-  HTML_TO_IMAGE_WORKER_URL?: string;
-  HTML_TO_IMAGE_WORKER_API_KEY?: string;
   APP_URL?: string;
   N8N_WEBHOOK_URL?: string;
   // YouTube APIs
   YOUTUBE_API_KEY?: string;
   SUPADATA_API_KEY?: string;
   // Service bindings
-  HTML_TO_IMAGE_SERVICE?: Fetcher;
   TRANSCRIPT_SERVICE?: Fetcher;
   // External APIs
   DUMPLING_API_KEY?: string;
@@ -190,68 +187,6 @@ export interface JWTPayload {
   exp: number;
 }
 
-// Visual content types
-export type ImageType = 'quote_card' | 'screenshot_card' | 'infographic' | 'story_card' | 'thumbnail';
-
-export interface VisualContentImage {
-  type: ImageType;
-  url: string;
-  width: number;
-  height: number;
-  filename?: string;
-  filesize?: number;
-}
-
-export interface VisualContent {
-  id: string;
-  user_id: string;
-  content_text: string;
-  content_type: string;
-  images_json: string;
-  carousel_mode: number;
-  caption?: string;
-  metadata_json?: string;
-  status: 'pending' | 'generated' | 'published' | 'failed';
-  created_at: number;
-  updated_at?: number;
-}
-
-export interface VisualContentMetadata {
-  branding?: {
-    logo?: string;
-    colors?: {
-      primary?: string;
-      secondary?: string;
-      background?: string;
-      text?: string;
-    };
-    fonts?: {
-      heading?: string;
-      body?: string;
-    };
-  };
-  customization?: Record<string, any>;
-  sourceUrl?: string;
-  account?: string;
-}
-
-export interface CreateVisualContentRequest {
-  text: string;
-  imageTypes: ImageType[];
-  carouselMode?: boolean;
-  branding?: VisualContentMetadata['branding'];
-  customization?: Record<string, any>;
-  generateCaption?: boolean;
-  context?: PostContext;
-}
-
-export interface CreateVisualContentResponse {
-  success: boolean;
-  visualContentId: string;
-  images: VisualContentImage[];
-  caption?: string;
-}
-
 // OpenRouter types
 export interface OpenRouterRequest {
   model: string;
@@ -284,80 +219,4 @@ export interface OpenRouterResponse {
     message: string;
     code: string;
   };
-}
-
-// Airtable types
-export interface AirtableWritingProfile {
-  language?: string;
-  tone?: string;
-  style?: string;
-  personality?: string;
-  guidelines?: string[];
-  avoid?: string[];
-  targetAudience?: string;
-  contentFocus?: string[];
-  voiceCharacteristics?: Record<string, any>;
-}
-
-export interface AirtableBrandingColors {
-  primary?: string;
-  secondary?: string;
-  background?: string;
-  text?: string;
-  accent?: string;
-}
-
-export interface AirtableUserProfile {
-  id: string;
-  userId: string;
-  name: string;
-  displayName?: string;
-  email?: string;
-  accounts?: string[];
-  writingProfile?: AirtableWritingProfile;
-  brandingColors?: AirtableBrandingColors;
-  logoUrl?: string;
-  defaultLanguage?: string;
-  enabled: boolean;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-export interface AirtableSocialProfile {
-  platform: string;
-  username?: string;
-  url?: string;
-  enabled: boolean;
-}
-
-export interface AirtableWebsite {
-  id: string;
-  websiteId: string;
-  name: string;
-  domain: string;
-  userId: string;
-  userProfileId?: string;
-  socialProfiles?: AirtableSocialProfile[];
-  schedulingWebhook?: string;
-  enabled: boolean;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-export interface AirtableSyncStatus {
-  lastSyncAt: number;
-  profilesCount: number;
-  websitesCount: number;
-  success: boolean;
-  errors?: string[];
-}
-
-export interface AirtableConfig {
-  baseId: string;
-  tables: {
-    profiles: string;
-    websites: string;
-  };
-  cacheTtl: number;
-  syncInterval: number;
 }

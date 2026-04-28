@@ -12,6 +12,7 @@ import settingsRoutes from './routes/settings';
 import webhookRoutes from './routes/webhook';
 import proxyRoutes from './routes/proxy';
 import searchRoutes from './routes/search';
+import ingestRoutes from './routes/ingest';
 import dashboardRoutes from './routes/dashboard';
 import mobileRoutes from './routes/mobile';
 import exportRoutes from './routes/export';
@@ -163,6 +164,7 @@ app.route('/api/memory', memoryRoutes);
 app.route('/api/settings', settingsRoutes);
 app.route('/api/proxy', proxyRoutes);
 app.route('/api/search', searchRoutes);
+app.route('/api/ingest', ingestRoutes);
 app.route('/api/export', exportRoutes);
 // Webhook routes (v1 for backward compatibility)
 app.route('/api/v1/webhook', webhookRoutes);
