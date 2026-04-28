@@ -1,0 +1,45 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>My Memory</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main class="popup-shell">
+      <header class="popup-header">
+        <div>
+          <h1>My Memory</h1>
+          <p id="page-title">Current page</p>
+        </div>
+        <span class="status-dot" id="status-dot"></span>
+      </header>
+
+      <section class="actions-grid">
+        <button class="action-button primary" id="save-page" type="button">
+          <span class="icon">+</span>
+          <span>Save page</span>
+        </button>
+        <button class="action-button" id="save-selection" type="button">
+          <span class="icon">T</span>
+          <span>Save selection</span>
+        </button>
+      </section>
+
+      <section class="note-section">
+        <textarea id="quick-note" placeholder="Quick note"></textarea>
+        <button id="save-note" type="button">Save note</button>
+      </section>
+
+      <nav class="links">
+        <button data-path="/dashboard" type="button">Dashboard</button>
+        <button data-path="/dashboard/memories" type="button">Memories</button>
+        <button data-path="/dashboard/insights" type="button">Insights</button>
+      </nav>
+
+      <p class="message" id="message"></p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

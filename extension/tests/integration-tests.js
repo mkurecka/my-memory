@@ -60,6 +60,8 @@ tests.test('background.js saves memories through ingest API', () => {
   const code = fs.readFileSync(path.join(__dirname, '../background.js'), 'utf8');
   tests.assertContains(code, 'apiClient.ingestMemory', 'background.js should use the ingest API for memory saves');
   tests.assertContains(code, 'request.action === "saveToMemory"', 'background.js should handle saveToMemory');
+  tests.assertContains(code, 'request.action === "savePageToMemory"', 'background.js should handle toolbar page saves');
+  tests.assertContains(code, 'request.action === "saveNoteToMemory"', 'background.js should handle toolbar note saves');
 });
 
 tests.test('background.js keeps processing behind backend proxy', () => {
@@ -103,17 +105,28 @@ tests.test('settings.json is memory-first', () => {
 
 tests.test('manifest.json has required capture permissions', () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '../manifest.json'), 'utf8'));
-  const required = ['activeTab', 'scripting', 'storage', 'contextMenus'];
+  const required = ['activeTab', 'scripting', 'storage', 'contextMenus', 'tabs'];
   required.forEach((permission) => {
     tests.assert(manifest.permissions?.includes(permission), `manifest should include ${permission}`);
   });
+  tests.assert(manifest.action?.default_popup === 'popup.html', 'manifest should wire toolbar icon to popup.html');
 });
 
 tests.test('required extension files exist', () => {
-  const required = ['manifest.json', 'background.js', 'content.js', 'api-client.js', 'settings-manager.js', 'settings.json', 'styles.css'];
+  const required = ['manifest.json', 'background.js', 'content.js', 'api-client.js', 'settings-manager.js', 'settings.json', 'styles.css', 'popup.html', 'popup.css', 'popup.js'];
   required.forEach((file) => {
     tests.assert(fs.existsSync(path.join(__dirname, '..', file)), `Required file ${file} should exist`);
   });
+});
+
+tests.test('popup exposes memory actions', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../popup.html'), 'utf8');
+  const js = fs.readFileSync(path.join(__dirname, '../popup.js'), 'utf8');
+  tests.assertContains(html, 'save-page', 'popup should expose save page action');
+  tests.assertContains(html, 'save-selection', 'popup should expose save selection action');
+  tests.assertContains(html, 'quick-note', 'popup should expose quick note input');
+  tests.assertContains(js, 'savePageToMemory', 'popup should send savePageToMemory');
+  tests.assertContains(js, 'saveNoteToMemory', 'popup should send saveNoteToMemory');
 });
 
 tests.run().catch((error) => {

@@ -29,115 +29,41 @@ let settingsLoaded = false;
 // Create context menu on install
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
-    id: "processSelectedText",
-    title: "Process Selected Text",
+    id: "saveSelectionToMemory",
+    title: "Save selection to My Memory",
     contexts: ["selection"]
   });
 
   chrome.contextMenus.create({
-    id: "saveToMemory",
-    title: "Save to Memory",
-    contexts: ["selection"]
+    id: "savePageToMemory",
+    title: "Save page to My Memory",
+    contexts: ["page"]
   });
 });
 
 // Handle context menu clicks
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId === "processSelectedText") {
-    const selectedText = info.selectionText;
+  if (!tab?.id) return;
 
-    if (!selectedText || selectedText.trim().length === 0) {
-      console.warn("[My Memory] No text selected");
-      return;
-    }
-
-    try {
-      await chrome.tabs.sendMessage(tab.id, {
-        action: "openProcessModal"
-      });
-      console.log("[My Memory] Opened modal from context menu");
-    } catch (error) {
-      console.log("[My Memory] Content script not available, trying to inject...");
-      // Try to inject content script if not loaded
-      try {
-        await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          files: ['content.js']
-        });
-
-        await chrome.scripting.insertCSS({
-          target: { tabId: tab.id },
-          files: ['styles.css']
-        });
-
-        console.log("[My Memory] Content script injected, retrying...");
-
-        // Small delay to let script initialize
-        await new Promise(resolve => setTimeout(resolve, 100));
-
-        // Retry after injection
-        await chrome.tabs.sendMessage(tab.id, {
-          action: "openProcessModal"
-        });
-      } catch (injectError) {
-        console.error("[My Memory] Cannot inject on this page:", injectError);
-        alert("Cannot use extension on this page. Try a regular website or the included test.html file.");
-      }
-    }
+  if (info.menuItemId === "saveSelectionToMemory") {
+    await saveMemoryData({
+      text: info.selectionText || '',
+      sourceType: 'text',
+      context: getTabContext(tab),
+      tag: 'selection'
+    });
+    return;
   }
 
-  if (info.menuItemId === "saveToMemory") {
-    const selectedText = info.selectionText;
-
-    // Always use tab info as fallback context
-    const fallbackContext = {
-      url: tab.url,
-      pageTitle: tab.title,
-      timestamp: new Date().toISOString()
-    };
-
-    try {
-      let context = fallbackContext;
-
-      try {
-        const response = await chrome.tabs.sendMessage(tab.id, {
-          action: "getSelectedText"
-        });
-        // Use detailed context from content script if available
-        context = response?.context || fallbackContext;
-      } catch (msgError) {
-        // Content script not available, use fallback context
-        console.log("[Extension] Using fallback context (content script unavailable)");
-      }
-
-      // Send to backend via webhook
-      await sendWebhookNotification('saveToMemory', {
-        text: selectedText,
-        context: context
-      });
-
-      console.log("[Extension] Saved to backend:", selectedText.substring(0, 50));
-    } catch (error) {
-      console.error("[Extension] Failed to save to memory:", error);
-      // Show error notification to user
-      chrome.notifications.create({
-        type: 'basic',
-        iconUrl: 'icon48.png',
-        title: 'Failed to Save',
-        message: error.message || 'Could not save to memory'
-      });
-    }
+  if (info.menuItemId === "savePageToMemory") {
+    await saveMemoryData({
+      text: tab.url || '',
+      sourceType: 'url',
+      context: getTabContext(tab),
+      tag: 'url'
+    });
   }
 });
-
-// Get API key from chrome.storage
-async function getApiKey() {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(['openrouterApiKey'], (result) => {
-      resolve(result.openrouterApiKey || null);
-    });
-  });
-}
 
 // Get user ID - single user app
 function getUserId() {
@@ -155,8 +81,55 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({
       status: "ok",
       timestamp: Date.now(),
-      backend: apiClient?.baseUrl || "not initialized"
+      backend: apiClient?.baseUrl || "not initialized",
+      dashboardUrl: getDashboardUrl()
     });
+    return true;
+  }
+
+  if (request.action === "getAppInfo") {
+    sendResponse({
+      success: true,
+      backend: apiClient?.baseUrl || "not initialized",
+      dashboardUrl: getDashboardUrl()
+    });
+    return true;
+  }
+
+  if (request.action === "savePageToMemory") {
+    (async () => {
+      try {
+        const tab = request.data?.tab || {};
+        const result = await saveMemoryData({
+          text: tab.url || request.data?.url,
+          sourceType: 'url',
+          context: request.data?.context || getTabContext(tab),
+          tag: request.data?.tag || 'url',
+          priority: request.data?.priority
+        });
+        sendResponse({ success: true, result });
+      } catch (error) {
+        sendResponse({ success: false, error: error.message || 'Failed to save page' });
+      }
+    })();
+    return true;
+  }
+
+  if (request.action === "saveNoteToMemory") {
+    (async () => {
+      try {
+        const result = await saveMemoryData({
+          text: request.data?.text,
+          sourceType: 'text',
+          context: request.data?.context || {},
+          tag: request.data?.tag || 'note',
+          priority: request.data?.priority
+        });
+        sendResponse({ success: true, result });
+      } catch (error) {
+        sendResponse({ success: false, error: error.message || 'Failed to save note' });
+      }
+    })();
     return true;
   }
 
@@ -527,16 +500,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "saveToMemory") {
     (async () => {
       try {
-        const result = await apiClient.ingestMemory({
-          sourceType: request.data.sourceType || inferSourceType(request.data.text, request.data.context),
-          content: request.data.text,
-          context: request.data.context || {},
-          metadata: {
-            savedAt: request.data.savedAt,
-            source: 'extension'
-          },
+        const result = await saveMemoryData({
+          text: request.data.text,
+          sourceType: request.data.sourceType,
+          context: request.data.context,
           tag: request.data.tag || request.data.context?.tag,
-          priority: request.data.priority || request.data.context?.priority
+          priority: request.data.priority || request.data.context?.priority,
+          savedAt: request.data.savedAt
         });
 
         sendResponse({ success: true, message: 'Saved to memory', result });
@@ -707,10 +677,42 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 });
 
+async function saveMemoryData({ text, sourceType, context = {}, tag, priority, savedAt }) {
+  const content = (text || '').trim();
+  if (!content) {
+    throw new Error('Nothing to save');
+  }
+
+  return apiClient.ingestMemory({
+    sourceType: sourceType || inferSourceType(content, context),
+    content,
+    context,
+    metadata: {
+      savedAt: savedAt || new Date().toISOString(),
+      source: 'extension'
+    },
+    tag,
+    priority
+  });
+}
+
 function inferSourceType(text, context = {}) {
   if (context.type === 'image') return 'image';
   if (/^https?:\/\/[^\s]+$/.test((text || '').trim())) return 'url';
   return 'text';
+}
+
+function getTabContext(tab = {}) {
+  return {
+    url: tab.url,
+    pageTitle: tab.title,
+    timestamp: new Date().toISOString()
+  };
+}
+
+function getDashboardUrl(path = '/dashboard') {
+  const baseUrl = settingsManager.settings?.backend?.baseUrl || apiClient?.baseUrl || 'https://my-memory.kureckamichal.workers.dev';
+  return `${baseUrl}${path}`;
 }
 
 // Webhook notification function

@@ -32,6 +32,11 @@ declare namespace chrome {
     }
   }
 
+  namespace action {
+    function setBadgeText(details: { text: string; tabId?: number }): Promise<void>;
+    function setBadgeBackgroundColor(details: { color: string | [number, number, number, number]; tabId?: number }): Promise<void>;
+  }
+
   namespace storage {
     interface StorageArea {
       get(keys: string | string[] | null): Promise<Record<string, unknown>>;
@@ -57,6 +62,20 @@ declare namespace chrome {
 
     function query(queryInfo: { active?: boolean; currentWindow?: boolean }): Promise<Tab[]>;
     function sendMessage<T = unknown>(tabId: number, message: unknown): Promise<T>;
+    function create(createProperties: { url: string; active?: boolean }): Promise<Tab>;
+  }
+
+  namespace scripting {
+    function executeScript<T = unknown>(details: {
+      target: { tabId: number };
+      files?: string[];
+      func?: () => T;
+    }): Promise<Array<{ result?: T }>>;
+
+    function insertCSS(details: {
+      target: { tabId: number };
+      files: string[];
+    }): Promise<void>;
   }
 
   namespace contextMenus {

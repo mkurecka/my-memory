@@ -1,0 +1,158 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  width: 340px;
+  margin: 0;
+  background: #f7f8fa;
+  color: #17202a;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+.popup-shell {
+  padding: 14px;
+}
+
+.popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.popup-header p {
+  margin: 4px 0 0;
+  max-width: 270px;
+  overflow: hidden;
+  color: #5b6673;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-dot {
+  width: 9px;
+  height: 9px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: #9aa4b2;
+}
+
+.status-dot.ready {
+  background: #16a34a;
+}
+
+.actions-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+button {
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.action-button {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #ffffff;
+  border: 1px solid #d9dee7;
+  color: #17202a;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.action-button.primary {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #ffffff;
+}
+
+.icon {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(15, 118, 110, 0.12);
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.primary .icon {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+.note-section {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+textarea {
+  width: 100%;
+  min-height: 84px;
+  resize: vertical;
+  border: 1px solid #d9dee7;
+  border-radius: 8px;
+  padding: 10px;
+  color: #17202a;
+  font: inherit;
+  font-size: 13px;
+}
+
+#save-note {
+  min-height: 38px;
+  background: #17202a;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.links {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.links button {
+  min-height: 34px;
+  background: transparent;
+  border: 1px solid #d9dee7;
+  color: #354152;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.message {
+  min-height: 16px;
+  margin: 10px 0 0;
+  color: #5b6673;
+  font-size: 12px;
+}
+
+.message.success {
+  color: #15803d;
+}
+
+.message.error {
+  color: #b91c1c;
+}

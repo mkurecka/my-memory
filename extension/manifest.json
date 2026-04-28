@@ -3,12 +3,16 @@
   "name": "My Memory",
   "version": "3.1.0",
   "description": "Capture and organize pages, selections, tweets, videos, and notes into your searchable personal memory.",
-  "permissions": ["activeTab", "scripting", "storage", "contextMenus"],
+  "permissions": ["activeTab", "scripting", "storage", "contextMenus", "tabs"],
   "host_permissions": [
     "<all_urls>"
   ],
   "background": {
     "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "My Memory",
+    "default_popup": "popup.html"
   },
   "content_scripts": [
     {
