@@ -5,6 +5,7 @@ import { ensureUserExists, simpleHash } from '../utils/helpers';
 import { detectUrlType } from '../utils/url';
 import { extractTwitterContent, extractWebpageContent, extractYouTubeContent } from '../utils/content-extraction';
 import { EMBEDDING_MODEL, generateEmbedding, insertVector } from '../utils/embeddings';
+import { analyzeMemory } from '../utils/memory-analyzer';
 
 type SourceType = 'text' | 'url' | 'image' | 'audio' | 'video' | 'telegram' | 'tweet' | 'youtube' | 'file' | 'screenshot';
 
@@ -100,6 +101,10 @@ ingest.post('/', async (c) => {
         type: sourceType,
       });
     }
+
+    c.executionCtx.waitUntil(
+      analyzeIngestedMemory(c.env, memoryId, text, context)
+    );
 
     return c.json({
       success: true,
@@ -204,6 +209,25 @@ function buildSearchKeywords(text: string, context: Record<string, any>): string
   ].filter(Boolean);
 
   return parts.join(' ').toLowerCase();
+}
+
+async function analyzeIngestedMemory(
+  env: Env,
+  memoryId: string,
+  text: string,
+  context: Record<string, any>
+): Promise<void> {
+  try {
+    const analysis = await analyzeMemory(env, text, context);
+    if (!analysis) return;
+
+    await env.DB
+      .prepare('UPDATE memory SET context_json = ? WHERE id = ?')
+      .bind(JSON.stringify({ ...context, analysis }), memoryId)
+      .run();
+  } catch (error: any) {
+    console.error('[Ingest] Background analysis error:', error.message);
+  }
 }
 
 export default ingest;

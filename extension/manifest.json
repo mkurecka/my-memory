@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "My Memory",
-  "version": "3.0.0",
-  "description": "Save and organize content from anywhere - tweets, videos, text, and more with AI-powered processing.",
+  "version": "3.1.0",
+  "description": "Capture and organize pages, selections, tweets, videos, and notes into your searchable personal memory.",
   "permissions": ["activeTab", "scripting", "storage", "contextMenus"],
   "host_permissions": [
     "<all_urls>"
