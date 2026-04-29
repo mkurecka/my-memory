@@ -575,7 +575,7 @@ router.post('/enrich-url-memories', async (c) => {
           extractedContent.title,
           extractedContent.description,
           extractedContent.transcript || extractedContent.text
-        ].filter(Boolean).join(' ').substring(0, 10000);
+        ].filter(Boolean).join(' ').substring(0, 50000);
 
         // Generate embedding
         const embedding = await generateEmbedding(c.env, combinedText);

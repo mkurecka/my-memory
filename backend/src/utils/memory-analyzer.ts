@@ -181,7 +181,7 @@ export async function analyzeMemory(
         'X-Title': 'My Memory Analyzer'
       },
       body: JSON.stringify({
-        model: 'openai/gpt-4o-mini',
+        model: 'openai/gpt-5.4-nano',
         messages: [
           {
             role: 'user',

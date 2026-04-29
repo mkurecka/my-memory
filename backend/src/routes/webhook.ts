@@ -17,11 +17,18 @@ const router = new Hono<{ Bindings: Env }>();
 router.post('/', async (c) => {
   try {
     const payload = await c.req.json();
-    const { event, data, userId } = payload;
+    const { event, data, userId: rawUserId } = payload;
+
+    // Normalize userId — external integrations (Telegram bot) may send
+    // non-standard user IDs; map them to the canonical mobile_user
+    const USER_ID_MAP: Record<string, string> = {
+      'test_user_123': 'mobile_user',
+    };
+    const userId = USER_ID_MAP[rawUserId] || rawUserId;
 
     console.log('[Webhook] Received event:', event);
     console.log('[Webhook] Full payload:', JSON.stringify(payload, null, 2));
-    console.log('[Webhook] UserId:', userId || 'anonymous');
+    console.log('[Webhook] UserId:', userId || 'anonymous', rawUserId !== userId ? `(mapped from ${rawUserId})` : '');
     console.log('[Webhook] Data keys:', data ? Object.keys(data) : 'no data');
 
     // Store webhook event in webhook_events table (event log)
@@ -536,7 +543,7 @@ async function enrichArticleContent(
 
       // Re-generate embedding with combined text (original + article) for better semantic search
       if (env.AI) {
-        const combinedText = `${existingPost.original_text} ${articleContent}`.substring(0, 10000);
+        const combinedText = `${existingPost.original_text} ${articleContent}`.substring(0, 50000);
         const embedding = await generateEmbedding(env, combinedText);
         if (embedding) {
           await env.DB

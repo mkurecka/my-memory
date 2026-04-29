@@ -100,7 +100,7 @@ memory.post('/', authMiddleware, async (c) => {
       if (urlType === 'youtube') {
         extractedContent = await extractYouTubeContent(c.env, url);
       } else if (urlType === 'twitter') {
-        extractedContent = await extractTwitterContent(url);
+        extractedContent = await extractTwitterContent(url, c.env.DUMPLING_API_KEY);
       } else {
         extractedContent = await extractWebpageContent(url);
       }
@@ -111,7 +111,7 @@ memory.post('/', authMiddleware, async (c) => {
           extractedContent.title,
           extractedContent.description,
           extractedContent.transcript || extractedContent.text
-        ].filter(Boolean).join(' ').substring(0, 10000);
+        ].filter(Boolean).join(' ').substring(0, 50000);
 
         // Merge context with extracted data
         finalContext = {
@@ -419,9 +419,12 @@ memory.post('/:id/enrich', authMiddleware, async (c) => {
       }, 400);
     }
 
-    const url = text;
+    // Use resolved URL from context if available (e.g., t.co -> x.com)
+    let existingCtx: Record<string, any> = {};
+    try { existingCtx = existing.context_json ? JSON.parse(existing.context_json) : {}; } catch {}
+    const url = existingCtx.url || text;
     const urlType = detectUrlType(url);
-    console.log('[Memory] Enriching:', memoryId, 'URL:', url, 'type:', urlType);
+    console.log('[Memory] Enriching:', memoryId, 'URL:', url, 'type:', urlType, '(raw:', text, ')');
 
     let extractedContent: {
       title?: string;
@@ -438,7 +441,7 @@ memory.post('/:id/enrich', authMiddleware, async (c) => {
     if (urlType === 'youtube') {
       extractedContent = await extractYouTubeContent(c.env, url);
     } else if (urlType === 'twitter') {
-      extractedContent = await extractTwitterContent(url);
+      extractedContent = await extractTwitterContent(url, c.env.DUMPLING_API_KEY);
     } else {
       // Generic webpage - try to fetch and extract
       extractedContent = await extractWebpageContent(url);
@@ -493,7 +496,7 @@ memory.post('/:id/enrich', authMiddleware, async (c) => {
         WHERE id = ?
       `)
       .bind(
-        combinedText.substring(0, 10000),
+        combinedText.substring(0, 50000),
         JSON.stringify(newContext),
         urlType,
         embedding ? JSON.stringify(embedding) : null,
@@ -906,7 +909,7 @@ memory.post('/from-media', authMiddleware, async (c) => {
     if (extraction.text) parts.push(extraction.text);
     if (extraction.description) parts.push(extraction.description);
     if (note) parts.push(`Note: ${note}`);
-    const memoryText = parts.join('\n\n').substring(0, 10000);
+    const memoryText = parts.join('\n\n').substring(0, 50000);
 
     if (!memoryText.trim()) {
       return c.json({ success: false, error: 'No content could be extracted from the media' }, 400);

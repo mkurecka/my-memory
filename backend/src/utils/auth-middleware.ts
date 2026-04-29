@@ -13,6 +13,12 @@ import { verifyJWT } from './jwt';
  *   - userTier: The authenticated user's subscription tier
  */
 export function createAuthMiddleware() {
+  // Map additional API keys to existing user accounts
+  // This allows Telegram bots and other integrations to save under the main user
+  const API_KEY_TO_USER: Record<string, string> = {
+    'mm_test_mcp_key_12345': 'mobile_user',  // Telegram MyMemory bot
+  };
+
   return async function authMiddleware(c: any, next: any) {
     const authHeader = c.req.header('Authorization');
     if (!authHeader) {
@@ -23,6 +29,22 @@ export function createAuthMiddleware() {
 
     // Check if it's an API key (starts with 'mm_')
     if (token.startsWith('mm_')) {
+      // Check hardcoded alias map first (for external integrations)
+      const aliasUserId = API_KEY_TO_USER[token];
+      if (aliasUserId) {
+        const user: any = await c.env.DB
+          .prepare('SELECT id, email, subscription_tier FROM users WHERE id = ?')
+          .bind(aliasUserId)
+          .first();
+        if (user) {
+          c.set('userId', user.id);
+          c.set('userEmail', user.email);
+          c.set('userTier', user.subscription_tier);
+          await next();
+          return;
+        }
+      }
+
       const user: any = await c.env.DB
         .prepare('SELECT id, email, subscription_tier FROM users WHERE api_key = ?')
         .bind(token)

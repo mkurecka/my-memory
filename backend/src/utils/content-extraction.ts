@@ -82,34 +82,54 @@ export async function extractYouTubeContent(env: any, url: string): Promise<Extr
  * Extract content from Twitter/X URL
  * Note: Limited without API access, just stores URL and oEmbed info
  */
-export async function extractTwitterContent(url: string): Promise<ExtractedContent | null> {
+export async function extractTwitterContent(url: string, dumplingApiKey?: string): Promise<ExtractedContent | null> {
+  let author = '';
+  let authorUrl = '';
+  let tweetText = '';
+
+  // Step 1: oEmbed for metadata
   try {
-    // Try Twitter oEmbed
     const oembedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(url)}`;
     const response = await fetch(oembedUrl);
-
     if (response.ok) {
       const oembed = await response.json() as any;
-      // Extract text from HTML (basic extraction)
+      author = oembed.author_name || '';
+      authorUrl = oembed.author_url || '';
       const htmlText = oembed.html || '';
       const textMatch = htmlText.match(/<p[^>]*>(.*?)<\/p>/i);
-      const tweetText = textMatch ? textMatch[1].replace(/<[^>]*>/g, '') : '';
-
-      return {
-        text: tweetText || url,
-        author: oembed.author_name,
-        metadata: {
-          authorUrl: oembed.author_url,
-          url
-        }
-      };
+      tweetText = textMatch ? textMatch[1].replace(/<[^>]*>/g, '') : '';
     }
   } catch (e) {
     console.warn('[ContentExtraction] Twitter oEmbed failed:', e);
   }
 
-  // Fallback: just return URL
-  return { text: url, metadata: { url } };
+  // Step 2: DumplingAI for full content (tweet text + linked articles)
+  if (dumplingApiKey) {
+    try {
+      const scrapeResponse = await fetch('https://app.dumplingai.com/api/v1/scrape', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${dumplingApiKey}`
+        },
+        body: JSON.stringify({ url, format: 'markdown', renderJs: true, cleaned: true })
+      });
+      if (scrapeResponse.ok) {
+        const data = await scrapeResponse.json() as any;
+        if (data?.content && data.content.length > 20) {
+          tweetText = data.content.substring(0, 50000);
+        }
+      }
+    } catch (e) {
+      console.warn('[ContentExtraction] DumplingAI Twitter scrape failed:', e);
+    }
+  }
+
+  return {
+    text: tweetText || url,
+    author,
+    metadata: { authorUrl, url, hasFullContent: tweetText.length > 50 }
+  };
 }
 
 /**

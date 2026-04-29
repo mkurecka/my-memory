@@ -691,7 +691,7 @@ async function saveMediaMemory(env: Env, userId: string, args: any) {
   if (extraction.text) parts.push(extraction.text);
   if (extraction.description) parts.push(extraction.description);
   if (note) parts.push(`Note: ${note}`);
-  const memoryText = parts.join('\n\n').substring(0, 10000);
+  const memoryText = parts.join('\n\n').substring(0, 50000);
 
   if (!memoryText.trim()) {
     return {

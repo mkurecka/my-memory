@@ -19,7 +19,7 @@ export function isUrl(text: string): boolean {
  */
 export function detectUrlType(url: string): 'youtube' | 'twitter' | 'webpage' {
   if (/youtube\.com|youtu\.be/i.test(url)) return 'youtube';
-  if (/twitter\.com|x\.com/i.test(url)) return 'twitter';
+  if (/twitter\.com|x\.com|t\.co/i.test(url)) return 'twitter';
   return 'webpage';
 }
 
@@ -112,23 +112,62 @@ export async function enrichUrlMemory(
           console.warn('[URL] YouTube oEmbed failed:', e);
         }
 
-        combinedText = [title, description, transcript].filter(Boolean).join(' ').substring(0, 10000) || url;
+        combinedText = [title, description, transcript].filter(Boolean).join(' ').substring(0, 50000) || url;
       }
     } else if (urlType === 'twitter') {
-      // Try Twitter oEmbed
+      // Step 1: Get author info from oEmbed (fast, reliable for metadata)
       try {
         const oembedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(url)}`;
         const response = await fetch(oembedUrl);
         if (response.ok) {
           const oembed = await response.json() as any;
           author = oembed.author_name || '';
+          metadata.authorUrl = oembed.author_url;
+          // Extract basic text from oEmbed HTML as fallback
           const htmlText = oembed.html || '';
           const textMatch = htmlText.match(/<p[^>]*>(.*?)<\/p>/i);
           combinedText = textMatch ? textMatch[1].replace(/<[^>]*>/g, '') : url;
-          metadata.authorUrl = oembed.author_url;
         }
       } catch (e) {
         console.warn('[URL] Twitter oEmbed failed:', e);
+      }
+
+      // Step 2: Scrape full content via DumplingAI (gets tweet text + linked articles)
+      if (env.DUMPLING_API_KEY) {
+        try {
+          console.log('[URL] Scraping Twitter content via DumplingAI:', url);
+          const scrapeResponse = await fetch('https://app.dumplingai.com/api/v1/scrape', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${env.DUMPLING_API_KEY}`
+            },
+            body: JSON.stringify({
+              url,
+              format: 'markdown',
+              renderJs: true,
+              cleaned: true
+            })
+          });
+          if (scrapeResponse.ok) {
+            const scrapeData = await scrapeResponse.json() as any;
+            const scrapedContent = scrapeData?.content || '';
+            if (scrapedContent && scrapedContent.length > 20) {
+              combinedText = scrapedContent.substring(0, 50000);
+              metadata.hasFullContent = true;
+              metadata.contentLength = scrapedContent.length;
+              console.log('[URL] DumplingAI scraped', scrapedContent.length, 'chars from Twitter');
+
+              // Try to extract title from scraped content
+              const titleLine = scrapedContent.split('\n').find((l: string) => l.startsWith('#'));
+              if (titleLine) title = titleLine.replace(/^#+\s*/, '');
+            }
+          } else {
+            console.warn('[URL] DumplingAI scrape failed:', scrapeResponse.status);
+          }
+        } catch (e) {
+          console.warn('[URL] DumplingAI Twitter scrape error:', e);
+        }
       }
     } else {
       // Generic webpage extraction
@@ -196,7 +235,7 @@ export async function enrichUrlMemory(
       SET text = ?, context_json = ?, tag = ?, embedding_vector = ?, embedding_model = ?, search_keywords = ?
       WHERE id = ?
     `).bind(
-      combinedText.substring(0, 10000),
+      combinedText.substring(0, 50000),
       JSON.stringify(context),
       'link',
       embedding ? JSON.stringify(embedding) : null,
