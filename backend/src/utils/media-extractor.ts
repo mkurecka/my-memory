@@ -5,7 +5,7 @@
 
 import type { Env } from '../types';
 
-const VISION_MODEL = 'google/gemini-3.1-flash-lite-preview';
+const VISION_MODEL = 'openai/gpt-6-luna';
 
 export interface MediaExtraction {
   text: string;           // All extracted/visible text (OCR)
