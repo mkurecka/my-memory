@@ -80,7 +80,6 @@ Server-rendered pages with 17 template files.
 | File | Purpose |
 |------|---------|
 | admin.ts | Migration & admin endpoints |
-| airtable.ts | Airtable integration |
 | auth.ts | JWT authentication |
 | chat.ts | Chat/RAG with memories |
 | claude-sessions.ts | Session tracking |

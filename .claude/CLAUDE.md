@@ -20,7 +20,6 @@ my-memory/
 │   │   ├── index.ts                 # Main Hono app, CORS, routes
 │   │   ├── routes/                  # API route handlers (21 files)
 │   │   │   ├── admin.ts             # Admin & migration endpoints
-│   │   │   ├── airtable.ts          # Airtable integration
 │   │   │   ├── auth.ts              # JWT authentication
 │   │   │   ├── chat.ts              # Chat/RAG with memories
 │   │   │   ├── claude-sessions.ts   # Claude Code session tracking
