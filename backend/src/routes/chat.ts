@@ -9,7 +9,7 @@ interface ChatRequest {
   message: string;
   conversationId?: string;
   userId?: string;
-  model?: string;  // Workers AI model: llama-3.1-8b-instruct (default), llama-3.2-3b-instruct (faster)
+  model?: string;  // Workers AI model: llama-3.1-8b-instruct (default), @cf/google/gemma-4-26b-a4b-it (cheaper; llama-3.2-3b-instruct is decommissioned 2026-11-20)
   includeMemories?: boolean;
   includePosts?: boolean;
   includeWorkSessions?: boolean;
