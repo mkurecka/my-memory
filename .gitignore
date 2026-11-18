@@ -24,3 +24,6 @@ Thumbs.db
 # Build outputs
 dist/
 build/
+
+# Claude Code session logs
+.claude/session-log.jsonl
