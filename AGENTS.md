@@ -1,3 +1,17 @@
+# my-memory
+
+Dev stack:
+cloudflare workers as backend - memory actions, ai generation
+chrome extension for interacting with memory - saving tweets, youtube video, web pages,..
+
+API:
+Openrouter
+html-to-image-worker (Cloudflare infra)
+
+---
+
+<!-- merged from .claude/CLAUDE.md on 2026-11-18 -->
+
 # My Memory - Technical Reference
 
 ## Project Overview
